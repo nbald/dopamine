@@ -1,0 +1,1685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dopamine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&family=Ubuntu+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-abyss: #1d2021;
+  --bg-base: #1d2021;
+  --bg-surface: #282828;
+  --bg-elevated: #32302f;
+  --bg-hover: #3c3836;
+  --bg-active: #504945;
+  --bg-terminal: #282828;
+
+  --border-ghost: rgba(235,219,178,0.04);
+  --border-subtle: rgba(235,219,178,0.07);
+  --border-default: #3c3836;
+  --border-focus: #689d6a;
+
+  --text-primary: #ebdbb2;
+  --text-secondary: #a89984;
+  --text-tertiary: #665c54;
+  --text-bright: #fbf1c7;
+
+  --accent: #689d6a;
+  --accent-bright: #8ec07c;
+  --accent-dim: rgba(104,157,106,0.12);
+  --accent-glow: rgba(104,157,106,0.05);
+
+  --green: #8ec07c;
+  --yellow: #d79921;
+  --red: #cc241d;
+  --purple: #b16286;
+  --blue: #458588;
+  --orange: #d65d0e;
+
+  --sidebar-w: 260px;
+  --pane-header-h: 34px;
+  --radius: 6px;
+  --transition: 150ms ease;
+
+  --font-ui: 'Ubuntu Mono', 'Cascadia Mono', 'Fira Mono', 'DejaVu Sans Mono', 'Consolas', monospace;
+  --font-mono: 'Ubuntu Mono', 'Cascadia Mono', 'Fira Mono', 'DejaVu Sans Mono', 'Consolas', monospace;
+  --font-brand: 'Ubuntu Mono', 'Cascadia Mono', 'Fira Mono', 'DejaVu Sans Mono', 'Consolas', monospace;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg-abyss);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.4;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════════════ NOISE TEXTURE ═══════════════ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-size: 256px;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ═══════════════ APP SHELL ═══════════════ */
+.app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ═══════════════ SIDEBAR ═══════════════ */
+.sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--bg-base);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  position: relative;
+}
+
+.sidebar.hidden {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-right: none;
+}
+
+.sidebar-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.sidebar-resize:hover {
+  background: var(--accent);
+  opacity: 0.3;
+}
+
+.sidebar-toggle {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 50;
+  width: 28px;
+  height: 28px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all var(--transition);
+}
+
+.sidebar-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sidebar.hidden ~ .sidebar-toggle,
+.sidebar-toggle.visible {
+  display: flex;
+}
+
+.sidebar-header {
+  padding: 16px 18px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  font-family: var(--font-brand);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hostname {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-secondary);
+  padding: 0 18px 10px;
+  border-bottom: 1px solid var(--border-ghost);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logout-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 13px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  transition: color 0.2s ease;
+}
+
+.logout-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: left;
+  border-radius: 3px;
+  z-index: 0;
+}
+
+.logout-btn.closing::before {
+  transform: scaleX(1);
+  transition: transform 3s cubic-bezier(0.2, 0.8, 0.4, 1);
+}
+
+.logout-btn.closing { color: var(--text-bright); }
+.logout-btn span { position: relative; z-index: 1; }
+.logout-btn:hover { color: var(--text-secondary); }
+
+.brand-logout {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--green);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 14px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  transition: color 0.2s ease;
+}
+
+.brand-logout::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: left;
+  border-radius: 3px;
+  z-index: 0;
+}
+
+.brand-logout.closing::before {
+  transform: scaleX(1);
+  transition: transform 3s cubic-bezier(0.2, 0.8, 0.4, 1);
+}
+
+.brand-logout.closing { color: var(--text-bright); }
+.brand-logout span { position: relative; z-index: 1; }
+
+.connection-badge {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.8;
+}
+
+.connection-badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0;
+}
+
+.sidebar-content::-webkit-scrollbar { width: 4px; }
+.sidebar-content::-webkit-scrollbar-track { background: transparent; }
+.sidebar-content::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 2px; }
+
+/* Section headers */
+.section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 10px 14px 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: color var(--transition);
+}
+
+.section-label:hover { color: var(--text-secondary); }
+
+.section-label .chevron {
+  font-size: 9px;
+  transition: transform var(--transition);
+}
+
+.section-label.collapsed .chevron { transform: rotate(-90deg); }
+
+/* Tree items */
+.tree-item {
+  display: flex;
+  align-items: center;
+  padding: 2px 10px 2px 14px;
+  gap: 6px;
+  cursor: pointer;
+  transition: background var(--transition);
+  position: relative;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.tree-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tree-item.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.tree-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 0 1px 1px 0;
+}
+
+.tree-item .icon {
+  font-size: 13px;
+  width: 16px;
+  white-space: nowrap;
+  text-align: center;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.tree-item.active .icon { opacity: 1; }
+
+.tree-item .label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Project group */
+.project-group { margin-bottom: 10px; }
+
+.project-header {
+  display: flex;
+  align-items: center;
+  padding: 3px 10px 3px 10px;
+  gap: 6px;
+  cursor: pointer;
+  transition: background var(--transition);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.project-header:hover { background: var(--bg-hover); }
+
+.project-header .expand-icon {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  width: 16px;
+  text-align: center;
+  transition: transform var(--transition);
+}
+
+.project-header.collapsed .expand-icon { transform: rotate(-90deg); }
+
+.project-header .project-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.project-header:hover .project-actions { opacity: 1; }
+
+.add-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  transition: all var(--transition);
+}
+
+.add-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.section-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.section-actions .add-btn {
+  opacity: 0.5;
+}
+
+.section-actions .add-btn:hover {
+  opacity: 1;
+}
+
+.project-children .tree-item { padding-left: 30px; }
+
+/* Activity indicator */
+.activity-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.activity-dot.active {
+  background: var(--accent);
+  animation: activity-pulse 3s ease-in-out infinite;
+}
+
+.activity-dot.claude {
+  background: var(--purple);
+  animation: claude-pulse 2s ease-in-out infinite;
+}
+
+.activity-dot.finished {
+  background: var(--green);
+}
+
+@keyframes activity-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.9; }
+}
+
+@keyframes claude-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ═══════════════ WORKSPACES ═══════════════ */
+.workspace-item {
+  display: flex;
+  align-items: center;
+  padding: 2px 10px 2px 30px;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+  transition: all var(--transition);
+}
+
+.workspace-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace-item.active {
+  color: var(--purple);
+}
+
+.workspace-item .ws-icon {
+  width: 16px;
+  font-size: 13px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.workspace-item.active .ws-icon {
+  color: var(--purple);
+}
+
+.workspace-item .ws-shortcut {
+  margin-left: auto;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  background: var(--bg-elevated);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* ═══════════════ CLAUDE USAGE WIDGET ═══════════════ */
+.sidebar-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-subtle);
+  padding: 12px 16px 14px;
+  background: var(--bg-base);
+}
+
+.claude-widget-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.claude-widget-title .sparkle {
+  color: var(--purple);
+  font-size: 11px;
+}
+
+.usage-row {
+  margin-bottom: 6px;
+}
+
+.usage-row:last-child { margin-bottom: 0; }
+
+.usage-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
+  font-weight: 400;
+}
+
+.usage-label .usage-value {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.usage-bar {
+  height: 3px;
+  background: var(--bg-elevated);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.usage-bar-fill {
+  height: 100%;
+  border-radius: 1px;
+  transition: width 0.5s ease;
+  opacity: 0.6;
+}
+
+.usage-bar-fill.gradient {
+  /* Color set by inline style based on percentage */
+}
+
+.usage-bar-fill.gray {
+  background: var(--text-tertiary);
+  opacity: 0.3;
+}
+
+/* ═══════════════ MAIN AREA ═══════════════ */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-abyss);
+  min-width: 0;
+}
+
+/* ═══════════════ SPLIT LAYOUT ═══════════════ */
+.split-h {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+}
+
+.split-v {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.split-child {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.split-divider-v {
+  width: 1px;
+  background: var(--border-subtle);
+  cursor: col-resize;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.split-divider-v::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: -3px; right: -3px;
+}
+
+.split-divider-v:hover { background: var(--accent); opacity: 0.5; }
+
+.split-divider-h {
+  height: 1px;
+  background: var(--border-subtle);
+  cursor: row-resize;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.split-divider-h::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  top: -3px; bottom: -3px;
+}
+
+.split-divider-h:hover { background: var(--accent); opacity: 0.5; }
+
+/* ═══════════════ PANE ═══════════════ */
+.pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  min-height: 0;
+  position: relative;
+  border: 1px solid transparent;
+  transition: border-color 200ms ease;
+}
+
+.pane.focused {
+  border-color: var(--accent);
+}
+
+.pane.focused.pane-note {
+  border-color: var(--yellow);
+}
+
+.pane.focused::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-dim), transparent);
+  z-index: 1;
+}
+
+.pane.focused.pane-note::before {
+  background: linear-gradient(90deg, transparent, rgba(215,153,33,0.12), transparent);
+}
+
+.pane.focused.pane-note .pane-header .pane-icon {
+  color: var(--yellow);
+}
+
+.pane-header {
+  height: var(--pane-header-h);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-ghost);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pane.focused .pane-header { color: var(--text-primary); }
+
+.pane-header .pane-icon {
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.pane.focused .pane-header .pane-icon {
+  opacity: 0.9;
+  color: var(--accent);
+}
+
+.pane-header .pane-title {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane-header .pane-badge {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.pane-badge.running {
+  color: var(--green);
+  background: rgba(52,211,153,0.1);
+}
+
+.pane-badge.exited {
+  color: var(--text-tertiary);
+  background: var(--bg-active);
+}
+
+.pane-fullscreen-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.pane-fullscreen-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pane-close-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 14px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  transition: color 0.2s ease;
+}
+
+.pane-close-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: left;
+  border-radius: 3px;
+  z-index: 0;
+}
+
+.pane-close-btn.closing::before {
+  transform: scaleX(1);
+  transition: transform 3s cubic-bezier(0.2, 0.8, 0.4, 1);
+}
+
+.pane-close-btn.closing {
+  color: var(--text-bright);
+}
+
+.pane-close-btn span {
+  position: relative;
+  z-index: 1;
+}
+
+.pane.maximized {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  border: none;
+}
+
+.pane-body {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ═══════════════ TERMINAL CONTENT ═══════════════ */
+.terminal-content {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1.2;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  background: var(--bg-terminal);
+  white-space: pre-wrap;
+  word-break: break-all;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.terminal-content::-webkit-scrollbar { width: 6px; }
+.terminal-content::-webkit-scrollbar-track { background: transparent; }
+.terminal-content::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
+
+/* Terminal colors — Gruvbox */
+.t-green { color: #8ec07c; }
+.t-yellow { color: #fabd2f; }
+.t-red { color: #fb4934; }
+.t-cyan { color: #8ec07c; }
+.t-blue { color: #83a598; }
+.t-purple { color: #d3869b; }
+.t-orange { color: #fe8019; }
+.t-dim { color: #665c54; }
+.t-bold { font-weight: 500; color: #fbf1c7; }
+.t-prompt { color: #8ec07c; }
+
+.cursor-block {
+  display: inline-block;
+  width: 8px;
+  height: 15px;
+  background: #ebdbb2;
+  animation: blink 1.2s step-end infinite;
+  vertical-align: text-bottom;
+  opacity: 0.7;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* Dead terminal banner */
+.dead-banner {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(180deg, transparent, var(--bg-surface) 30%);
+  padding: 40px 16px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.dead-banner-text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.dead-banner-code {
+  color: var(--green);
+}
+
+.restart-btn {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.restart-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+/* ═══════════════ NOTE EDITOR ═══════════════ */
+.note-editor {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1.2;
+  padding: 12px 16px;
+  color: var(--text-primary);
+  background: var(--bg-terminal);
+  border: none;
+  outline: none;
+  resize: none;
+  width: 100%;
+  height: 100%;
+}
+
+.note-editor::placeholder { color: var(--text-tertiary); }
+
+/* ═══════════════ IFRAME PANEL ═══════════════ */
+.iframe-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-terminal);
+}
+
+.iframe-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-ghost);
+  flex-shrink: 0;
+}
+
+.iframe-url {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  padding: 3px 8px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.iframe-url:focus { border-color: var(--border-focus); }
+
+.iframe-btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.iframe-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.iframe-btn.active {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.iframe-frame {
+  flex: 1;
+  border: none;
+  width: 100%;
+  background: #fff;
+}
+
+.pane.focused.pane-iframe {
+  border-color: var(--blue);
+}
+
+.pane.focused.pane-iframe::before {
+  background: linear-gradient(90deg, transparent, rgba(69,133,136,0.12), transparent);
+}
+
+.pane.focused.pane-iframe .pane-header .pane-icon {
+  color: var(--blue);
+}
+
+/* ═══════════════ FUZZY FINDER ═══════════════ */
+.fuzzy-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4,6,10,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 18vh;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.fuzzy-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.fuzzy-modal {
+  width: 520px;
+  max-height: 400px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateY(-8px) scale(0.98);
+  transition: transform 150ms ease;
+}
+
+.fuzzy-overlay.visible .fuzzy-modal {
+  transform: translateY(0) scale(1);
+}
+
+.fuzzy-input-wrap {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fuzzy-input-wrap .search-icon {
+  color: var(--text-tertiary);
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.fuzzy-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.fuzzy-input::placeholder { color: var(--text-tertiary); }
+
+.fuzzy-hint {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  background: var(--bg-active);
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.fuzzy-results {
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.fuzzy-result {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 80ms ease;
+}
+
+.fuzzy-result:hover, .fuzzy-result.selected {
+  background: var(--bg-hover);
+}
+
+.fuzzy-result.selected {
+  background: var(--accent-dim);
+}
+
+.fuzzy-result .result-icon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.fuzzy-result.selected .result-icon { color: var(--accent); }
+
+.fuzzy-result .result-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.fuzzy-result .result-project {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.fuzzy-result .result-name .highlight {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* ═══════════════ NOTIFICATION FLASH ═══════════════ */
+@keyframes screen-flash {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.flash-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+}
+
+.flash-overlay.active {
+  border: 1px solid var(--purple);
+  box-shadow: inset 0 0 30px rgba(138,122,184,0.04);
+  animation: screen-flash 1.5s ease-out forwards;
+}
+
+/* ═══════════════ KEYBOARD SHORTCUT HINTS ═══════════════ */
+kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-active);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-subtle);
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ═══════════════ SIDEBAR ═══════════════ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="brand">
+        <button class="brand-logout" id="brandLogout" title="Hold 3s to logout"><span>&#x23FB;</span></button>
+        Dopamine
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <div class="connection-badge">connected</div>
+        <button class="pane-fullscreen-btn" id="pageFullscreen" title="Fullscreen">&#x26F6;</button>
+      </div>
+    </div>
+    <div class="hostname">nicolas@devbox</div>
+
+    <div class="sidebar-content">
+      <!-- WORKSPACES -->
+      <div class="section-label" data-section="workspaces">
+        Workspaces
+        <div class="section-actions">
+          <button class="add-btn" title="New workspace">+</button>
+        </div>
+      </div>
+
+      <div data-section-content="workspaces">
+        <div class="workspace-item active">
+          <span class="ws-icon">&#9707;</span>
+          <span>Default</span>
+          <span class="ws-shortcut">^1</span>
+        </div>
+        <div class="workspace-item">
+          <span class="ws-icon">&#9707;</span>
+          <span>Debug</span>
+          <span class="ws-shortcut">^2</span>
+        </div>
+        <div class="workspace-item">
+          <span class="ws-icon">&#9707;</span>
+          <span>Monitoring</span>
+          <span class="ws-shortcut">^3</span>
+        </div>
+      </div>
+
+      <!-- PROJECTS -->
+      <div class="section-label" data-section="projects" style="margin-top: 8px;">
+        Projects
+        <div class="section-actions">
+          <button class="add-btn" title="New project">+</button>
+        </div>
+      </div>
+
+      <div class="project-group" data-section-content="projects">
+        <div class="project-header" data-project="api">
+          <span class="expand-icon">&#9662;</span>
+          <span style="flex:1">api-server</span>
+          <div class="project-actions">
+            <button class="add-btn" title="New terminal">&gt;_</button>
+            <button class="add-btn" title="New note">&#9776;</button>
+            <button class="add-btn" title="New iframe">&lt;/&gt;</button>
+          </div>
+        </div>
+        <div class="project-children" data-project-children="api">
+          <div class="tree-item active" data-type="terminal" data-id="t1">
+            <span class="icon">&gt;_</span>
+            <span class="label">uvicorn</span>
+            <span class="activity-dot active"></span>
+          </div>
+          <div class="tree-item" data-type="terminal" data-id="t2">
+            <span class="icon">&gt;_</span>
+            <span class="label">docker compose</span>
+            <span class="activity-dot"></span>
+          </div>
+          <div class="tree-item" data-type="terminal" data-id="t3">
+            <span class="icon">&gt;_</span>
+            <span class="label">pytest</span>
+            <span class="activity-dot finished"></span>
+          </div>
+          <div class="tree-item" data-type="note" data-id="n1">
+            <span class="icon">&#9776;</span>
+            <span class="label">api design notes</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="project-group" data-section-content="projects">
+        <div class="project-header" data-project="front">
+          <span class="expand-icon">&#9662;</span>
+          <span style="flex:1">frontend</span>
+          <div class="project-actions">
+            <button class="add-btn" title="New terminal">&gt;_</button>
+            <button class="add-btn" title="New note">&#9776;</button>
+            <button class="add-btn" title="New iframe">&lt;/&gt;</button>
+          </div>
+        </div>
+        <div class="project-children" data-project-children="front">
+          <div class="tree-item" data-type="terminal" data-id="t4">
+            <span class="icon">&gt;_</span>
+            <span class="label">vite dev</span>
+            <span class="activity-dot active"></span>
+          </div>
+          <div class="tree-item" data-type="terminal" data-id="t5">
+            <span class="icon">&gt;_</span>
+            <span class="label">✳ claude code</span>
+            <span class="activity-dot claude"></span>
+          </div>
+          <div class="tree-item" data-type="note" data-id="n2">
+            <span class="icon">&#9776;</span>
+            <span class="label">component spec</span>
+          </div>
+          <div class="tree-item" data-type="iframe" data-id="i1">
+            <span class="icon">&lt;/&gt;</span>
+            <span class="label">localhost:5173</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="project-group" data-section-content="projects">
+        <div class="project-header collapsed" data-project="infra">
+          <span class="expand-icon">&#9662;</span>
+          <span style="flex:1; color: var(--text-secondary)">infrastructure</span>
+          <div class="project-actions">
+            <button class="add-btn" title="New terminal">&gt;_</button>
+            <button class="add-btn" title="New note">&#9776;</button>
+            <button class="add-btn" title="New iframe">&lt;/&gt;</button>
+          </div>
+        </div>
+        <div class="project-children" data-project-children="infra" style="display:none">
+          <div class="tree-item" data-type="terminal" data-id="t6">
+            <span class="icon">&gt;_</span>
+            <span class="label">k8s watch</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- CLAUDE USAGE -->
+    <div class="sidebar-footer">
+      <div class="claude-widget-title">
+        <span class="sparkle">&#10023;</span> Claude Usage
+      </div>
+      <div class="usage-row">
+        <div class="usage-label">
+          <span>Session (5h)</span>
+          <span class="usage-value">34%</span>
+        </div>
+        <div class="usage-bar">
+          <div class="usage-bar-fill gradient" style="width: 34%; background: hsl(79, 40%, 40%);"></div>
+        </div>
+      </div>
+      <div class="usage-row">
+        <div class="usage-label">
+          <span>Session elapsed</span>
+          <span class="usage-value">1h12m</span>
+        </div>
+        <div class="usage-bar">
+          <div class="usage-bar-fill gray" style="width: 24%;"></div>
+        </div>
+      </div>
+      <div class="usage-row">
+        <div class="usage-label">
+          <span>Weekly</span>
+          <span class="usage-value">68%</span>
+        </div>
+        <div class="usage-bar">
+          <div class="usage-bar-fill gradient" style="width: 68%; background: hsl(38, 40%, 40%);"></div>
+        </div>
+      </div>
+      <div class="usage-row">
+        <div class="usage-label">
+          <span>Week elapsed</span>
+          <span class="usage-value">4d 7h</span>
+        </div>
+        <div class="usage-bar">
+          <div class="usage-bar-fill gray" style="width: 61%;"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════ MAIN AREA ═══════════════ -->
+  <main class="main">
+    <div class="split-h" style="flex:1; min-height:0;">
+      <!-- LEFT COLUMN (2 panes stacked) -->
+      <div class="split-child" style="flex: 0.55;">
+        <div class="split-v" style="flex:1;">
+          <div class="split-child" style="flex: 0.6;">
+            <div class="pane focused" data-pane="p1">
+              <div class="pane-header">
+                <span class="pane-icon">&gt;_</span>
+                <span class="pane-title">uvicorn &mdash; ~/projects/api</span>
+                <span class="pane-badge running">running</span>
+                <button class="pane-fullscreen-btn" title="Fullscreen">&#x26F6;</button><button class="pane-close-btn" title="Hold 3s to close"><span>&#xd7;</span></button>
+              </div>
+              <div class="pane-body">
+                <div class="terminal-content"><span class="t-prompt">~/projects/api $</span> python -m uvicorn main:app --reload --host 0.0.0.0
+<span class="t-green">INFO</span>:     Uvicorn running on <span class="t-cyan">http://0.0.0.0:8000</span> (Press CTRL+C to quit)
+<span class="t-green">INFO</span>:     Started reloader process [<span class="t-dim">28451</span>] using WatchFiles
+<span class="t-green">INFO</span>:     Started server process [<span class="t-dim">28453</span>]
+<span class="t-green">INFO</span>:     Waiting for application startup.
+<span class="t-green">INFO</span>:     Application startup complete.
+<span class="t-green">INFO</span>:     <span class="t-dim">127.0.0.1:52341</span> - "<span class="t-bold">GET /api/health</span>" <span class="t-green">200 OK</span>
+<span class="t-green">INFO</span>:     <span class="t-dim">127.0.0.1:52342</span> - "<span class="t-bold">POST /api/users</span>" <span class="t-green">201 Created</span>
+<span class="t-green">INFO</span>:     <span class="t-dim">127.0.0.1:52343</span> - "<span class="t-bold">GET /api/users/42</span>" <span class="t-green">200 OK</span>
+<span class="t-yellow">WARNING</span>:  <span class="t-dim">127.0.0.1:52344</span> - "<span class="t-bold">DELETE /api/users/999</span>" <span class="t-yellow">404 Not Found</span>
+<span class="t-green">INFO</span>:     <span class="t-dim">127.0.0.1:52345</span> - "<span class="t-bold">GET /api/projects</span>" <span class="t-green">200 OK</span>
+<span class="t-green">INFO</span>:     <span class="t-dim">127.0.0.1:52346</span> - "<span class="t-bold">PUT /api/users/42</span>" <span class="t-green">200 OK</span>
+<span class="t-prompt">~/projects/api $</span> <span class="cursor-block"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="split-divider-h"></div>
+          <div class="split-child" style="flex: 0.4;">
+            <div class="pane" data-pane="p2">
+              <div class="pane-header">
+                <span class="pane-icon">&gt;_</span>
+                <span class="pane-title">pytest &mdash; ~/projects/api</span>
+                <span class="pane-badge exited">exited 0</span>
+                <button class="pane-fullscreen-btn" title="Fullscreen">&#x26F6;</button><button class="pane-close-btn" title="Hold 3s to close"><span>&#xd7;</span></button>
+              </div>
+              <div class="pane-body">
+                <div class="terminal-content"><span class="t-prompt">~/projects/api $</span> pytest -v --tb=short
+<span class="t-bold">======================== test session starts ========================</span>
+platform linux -- Python 3.12.2, pytest-8.1.1, pluggy-1.5.0
+collected <span class="t-bold">23 items</span>
+
+tests/test_auth.py::<span class="t-bold">test_login</span> <span class="t-green">PASSED</span>
+tests/test_auth.py::<span class="t-bold">test_register</span> <span class="t-green">PASSED</span>
+tests/test_auth.py::<span class="t-bold">test_invalid_token</span> <span class="t-green">PASSED</span>
+tests/test_auth.py::<span class="t-bold">test_refresh_token</span> <span class="t-green">PASSED</span>
+tests/test_users.py::<span class="t-bold">test_create_user</span> <span class="t-green">PASSED</span>
+tests/test_users.py::<span class="t-bold">test_list_users</span> <span class="t-green">PASSED</span>
+tests/test_users.py::<span class="t-bold">test_delete_user</span> <span class="t-green">PASSED</span>
+tests/test_users.py::<span class="t-bold">test_update_user</span> <span class="t-green">PASSED</span>
+tests/test_projects.py::<span class="t-bold">test_crud</span> <span class="t-green">PASSED</span>
+
+<span class="t-bold">===================== <span class="t-green">23 passed</span> in 1.42s =====================</span></div>
+                <div class="dead-banner">
+                  <span class="dead-banner-text">Process exited <span class="dead-banner-code">(0)</span></span>
+                  <button class="restart-btn">&#8634; Restart</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="split-divider-v"></div>
+
+      <!-- RIGHT COLUMN (3 panes stacked) -->
+      <div class="split-child" style="flex: 0.45;">
+        <div class="split-v" style="flex:1;">
+          <div class="split-child" style="flex: 0.4;">
+            <div class="pane" data-pane="p3">
+              <div class="pane-header">
+                <span class="pane-icon">&gt;_</span>
+                <span class="pane-title">docker compose &mdash; ~/projects/api</span>
+                <span class="pane-badge running">running</span>
+                <button class="pane-fullscreen-btn" title="Fullscreen">&#x26F6;</button><button class="pane-close-btn" title="Hold 3s to close"><span>&#xd7;</span></button>
+              </div>
+              <div class="pane-body">
+                <div class="terminal-content"><span class="t-prompt">~/projects/api $</span> docker compose up
+<span class="t-green">[+] Running 3/3</span>
+ <span class="t-green">&#10003;</span> Network <span class="t-bold">api_default</span>       <span class="t-green">Created</span>                              0.1s
+ <span class="t-green">&#10003;</span> Container <span class="t-bold">api-postgres-1</span>  <span class="t-green">Started</span>                              0.8s
+ <span class="t-green">&#10003;</span> Container <span class="t-bold">api-redis-1</span>     <span class="t-green">Started</span>                              0.6s
+Attaching to api-postgres-1, api-redis-1
+<span class="t-blue">api-postgres-1</span>  | <span class="t-dim">2026-03-24 10:23:01.234 UTC [1]</span> <span class="t-green">LOG</span>:  starting PostgreSQL 16.2
+<span class="t-blue">api-postgres-1</span>  | <span class="t-dim">2026-03-24 10:23:01.235 UTC [1]</span> <span class="t-green">LOG</span>:  listening on IPv4 address "0.0.0.0", port 5432
+<span class="t-purple">api-redis-1</span>     | <span class="t-dim">1:M 24 Mar 2026 10:23:01.457</span> <span class="t-red">*</span> Ready to accept connections tcp</div>
+              </div>
+            </div>
+          </div>
+          <div class="split-divider-h"></div>
+          <div class="split-child" style="flex: 0.25;">
+            <div class="pane pane-note" data-pane="p4">
+              <div class="pane-header">
+                <span class="pane-icon">&#9776;</span>
+                <span class="pane-title">api design notes</span>
+                <span style="margin-left:auto; font-size:10px; color:var(--text-tertiary)">auto-saved</span>
+                <button class="pane-fullscreen-btn" title="Fullscreen">&#x26F6;</button><button class="pane-close-btn" title="Hold 3s to close"><span>&#xd7;</span></button>
+              </div>
+              <div class="pane-body">
+                <textarea class="note-editor" spellcheck="false">## API v2 Migration Plan
+
+Endpoints to refactor:
+  - /api/users  → cursor pagination
+  - /api/auth   → refresh token rotation
+
+TODO:
+  [x] schema migration script
+  [ ] load testing with locust</textarea>
+              </div>
+            </div>
+          </div>
+          <div class="split-divider-h"></div>
+          <div class="split-child" style="flex: 0.35;">
+            <div class="pane pane-iframe" data-pane="p5">
+              <div class="pane-header">
+                <span class="pane-icon">&lt;/&gt;</span>
+                <span class="pane-title">localhost:5173</span>
+                <button class="pane-fullscreen-btn" title="Fullscreen">&#x26F6;</button><button class="pane-close-btn" title="Hold 3s to close"><span>&#xd7;</span></button>
+              </div>
+              <div class="pane-body">
+                <div class="iframe-container">
+                  <div class="iframe-toolbar">
+                    <input class="iframe-url" value="https://localhost:5173" spellcheck="false">
+                    <button class="iframe-btn" title="Reload">&#8634;</button>
+                    <button class="iframe-btn active" title="Toggle DevTools">DevTools</button>
+                  </div>
+                  <div style="flex:1;display:flex;align-items:center;justify-content:center;background:#1a1a2e;color:var(--text-tertiary);font-family:var(--font-mono);font-size:13px;">
+                    &lt;iframe&gt; preview &mdash; localhost:5173
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════ FUZZY FINDER ═══════════════ -->
+<div class="fuzzy-overlay" id="fuzzyOverlay">
+  <div class="fuzzy-modal">
+    <div class="fuzzy-input-wrap">
+      <span class="search-icon">&#8981;</span>
+      <input class="fuzzy-input" id="fuzzyInput" type="text" placeholder="Jump to terminal or note..." autofocus>
+      <span class="fuzzy-hint">esc</span>
+    </div>
+    <div class="fuzzy-results">
+      <div class="fuzzy-result selected">
+        <span class="result-icon">&gt;_</span>
+        <span class="result-name"><span class="highlight">u</span><span class="highlight">v</span>icorn</span>
+        <span class="result-project">api-server</span>
+      </div>
+      <div class="fuzzy-result">
+        <span class="result-icon">&gt;_</span>
+        <span class="result-name"><span class="highlight">v</span>ite de<span class="highlight">v</span></span>
+        <span class="result-project">frontend</span>
+      </div>
+      <div class="fuzzy-result">
+        <span class="result-icon">&gt;_</span>
+        <span class="result-name">docker compose</span>
+        <span class="result-project">api-server</span>
+      </div>
+      <div class="fuzzy-result">
+        <span class="result-icon">&gt;_</span>
+        <span class="result-name">pytest</span>
+        <span class="result-project">api-server</span>
+      </div>
+      <div class="fuzzy-result">
+        <span class="result-icon">&gt;_</span>
+        <span class="result-name">&#10035; claude code</span>
+        <span class="result-project">frontend</span>
+      </div>
+      <div class="fuzzy-result">
+        <span class="result-icon">&#9776;</span>
+        <span class="result-name">api design notes</span>
+        <span class="result-project">api-server</span>
+      </div>
+      <div class="fuzzy-result">
+        <span class="result-icon">&#9776;</span>
+        <span class="result-name">component spec</span>
+        <span class="result-project">frontend</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ NOTIFICATION FLASH ═══════════════ -->
+<div class="flash-overlay" id="flashOverlay"></div>
+
+<script>
+// ── Pane focus ──
+document.querySelectorAll('.pane').forEach(pane => {
+  pane.addEventListener('click', (e) => {
+    if (e.target.closest('.pane-fullscreen-btn')) return;
+    document.querySelectorAll('.pane').forEach(p => p.classList.remove('focused'));
+    pane.classList.add('focused');
+  });
+});
+
+// ── Fullscreen toggle ──
+document.querySelectorAll('.pane-fullscreen-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const pane = btn.closest('.pane');
+    pane.classList.toggle('maximized');
+    btn.textContent = pane.classList.contains('maximized') ? '\u2716' : '\u26F6';
+  });
+});
+
+// ── Sidebar tree item selection ──
+document.querySelectorAll('.tree-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.tree-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+  });
+});
+
+// ── Project expand/collapse ──
+document.querySelectorAll('.project-header').forEach(header => {
+  header.addEventListener('click', () => {
+    const project = header.dataset.project;
+    const children = document.querySelector(`[data-project-children="${project}"]`);
+    header.classList.toggle('collapsed');
+    children.style.display = header.classList.contains('collapsed') ? 'none' : '';
+  });
+});
+
+// ── Workspace switching ──
+document.querySelectorAll('.workspace-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.workspace-item').forEach(w => w.classList.remove('active'));
+    item.classList.add('active');
+  });
+});
+
+// ── Fuzzy finder ──
+const fuzzyOverlay = document.getElementById('fuzzyOverlay');
+const fuzzyInput = document.getElementById('fuzzyInput');
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+    e.preventDefault();
+    fuzzyOverlay.classList.toggle('visible');
+    if (fuzzyOverlay.classList.contains('visible')) {
+      fuzzyInput.focus();
+      fuzzyInput.value = '';
+    }
+  }
+  if (e.key === 'Escape') {
+    fuzzyOverlay.classList.remove('visible');
+  }
+});
+
+fuzzyOverlay.addEventListener('click', e => {
+  if (e.target === fuzzyOverlay) fuzzyOverlay.classList.remove('visible');
+});
+
+// ── Fuzzy result keyboard navigation ──
+let selectedIdx = 0;
+const results = document.querySelectorAll('.fuzzy-result');
+
+fuzzyInput.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    selectedIdx = Math.min(selectedIdx + 1, results.length - 1);
+    updateFuzzySelection();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    selectedIdx = Math.max(selectedIdx - 1, 0);
+    updateFuzzySelection();
+  } else if (e.key === 'Enter') {
+    fuzzyOverlay.classList.remove('visible');
+  }
+});
+
+function updateFuzzySelection() {
+  results.forEach((r, i) => r.classList.toggle('selected', i === selectedIdx));
+}
+
+// ── Long-press close button (3s hold) ──
+document.querySelectorAll('.pane-close-btn').forEach(btn => {
+  let timer = null;
+  btn.addEventListener('mousedown', () => {
+    btn.classList.add('closing');
+    timer = setTimeout(() => {
+      const pane = btn.closest('.pane');
+      pane.style.display = 'none';
+      btn.classList.remove('closing');
+    }, 3000);
+  });
+  btn.addEventListener('mouseup', () => {
+    clearTimeout(timer);
+    btn.classList.remove('closing');
+  });
+  btn.addEventListener('mouseleave', () => {
+    clearTimeout(timer);
+    btn.classList.remove('closing');
+  });
+});
+
+// ── Double-click rename in sidebar ──
+document.querySelectorAll('.tree-item .label, .workspace-item span:not(.ws-shortcut):not(.ws-icon)').forEach(label => {
+  label.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    const original = label.textContent;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = original;
+    input.style.cssText = 'background:var(--bg-active);border:1px solid var(--border-focus);border-radius:3px;color:var(--text-primary);font:inherit;padding:0 4px;width:100%;outline:none;';
+    label.replaceWith(input);
+    input.focus();
+    input.select();
+    const finish = () => {
+      const span = document.createElement('span');
+      span.className = label.className;
+      span.textContent = input.value || original;
+      input.replaceWith(span);
+      // Re-attach dblclick on the new span
+      span.addEventListener('dblclick', label.ondblclick);
+    };
+    input.addEventListener('blur', finish);
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') input.blur();
+      if (ev.key === 'Escape') { input.value = original; input.blur(); }
+    });
+  });
+});
+
+// ── Long-press power icon to logout (3s hold) ──
+const logoutBtn = document.getElementById('brandLogout');
+let logoutTimer = null;
+logoutBtn.addEventListener('mousedown', (e) => {
+  e.stopPropagation();
+  logoutBtn.classList.add('closing');
+  logoutTimer = setTimeout(() => {
+    logoutBtn.classList.remove('closing');
+    alert('Logged out');
+  }, 3000);
+});
+logoutBtn.addEventListener('mouseup', () => { clearTimeout(logoutTimer); logoutBtn.classList.remove('closing'); });
+logoutBtn.addEventListener('mouseleave', () => { clearTimeout(logoutTimer); logoutBtn.classList.remove('closing'); });
+
+// ── Page fullscreen ──
+document.getElementById('pageFullscreen').addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+});
+
+// ── Demo: Claude completion flash ──
+setTimeout(() => {
+  const flash = document.getElementById('flashOverlay');
+  flash.classList.add('active');
+  setTimeout(() => flash.classList.remove('active'), 1500);
+}, 3000);
+</script>
+
+</body>
+</html>

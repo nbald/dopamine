@@ -1,0 +1,16 @@
+{
+  "name": "Dopamine",
+  "short_name": "Dopamine",
+  "description": "Persistent terminal manager for developers",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#282828",
+  "theme_color": "#282828",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+import { Router } from 'express';
+import { getDb } from '../db.js';
+import { sanitizeName } from '../utils/sanitize.js';
+
+const router = Router();
+
+router.get('/projects', (_req, res) => {
+  const rows = getDb().prepare('SELECT * FROM projects ORDER BY sort_order').all();
+  res.json(rows);
+});
+
+router.post('/projects', (req, res) => {
+  const name = sanitizeName(req.body.name);
+  if (!name) {
+    res.status(400).json({ error: 'Name required' });
+    return;
+  }
+
+  const max = getDb().prepare('SELECT COALESCE(MAX(sort_order), -1) as m FROM projects').get() as { m: number };
+  const result = getDb().prepare('INSERT INTO projects (name, sort_order) VALUES (?, ?)').run(name, max.m + 1);
+
+  res.status(201).json({
+    id: Number(result.lastInsertRowid),
+    name,
+    sort_order: max.m + 1,
+  });
+});
+
+router.put('/projects/reorder', (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) { res.status(400).json({ error: 'ids array required' }); return; }
+  const stmt = getDb().prepare("UPDATE projects SET sort_order = ?, updated_at = datetime('now') WHERE id = ?");
+  const tx = getDb().transaction(() => {
+    for (let i = 0; i < ids.length; i++) {
+      stmt.run(i, Number(ids[i]));
+    }
+  });
+  tx();
+  res.status(204).end();
+});
+
+router.put('/projects/:id', (req, res) => {
+  const { id } = req.params;
+  const { name, sortOrder } = req.body;
+
+  const updates: string[] = [];
+  const values: any[] = [];
+
+  if (name !== undefined) { updates.push('name = ?'); values.push(name); }
+  if (sortOrder !== undefined) { updates.push('sort_order = ?'); values.push(sortOrder); }
+
+  if (updates.length === 0) {
+    res.status(400).json({ error: 'Nothing to update' });
+    return;
+  }
+
+  updates.push("updated_at = datetime('now')");
+  values.push(Number(id));
+
+  getDb().prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  res.status(204).end();
+});
+
+router.delete('/projects/:id', (req, res) => {
+  const { id } = req.params;
+  getDb().prepare('DELETE FROM projects WHERE id = ?').run(Number(id));
+  res.status(204).end();
+});
+
+export default router;
