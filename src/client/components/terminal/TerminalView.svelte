@@ -35,6 +35,8 @@
   let exitCode = $state<number | null>(null);
   let showDropOverlay = $state(false);
   let isScrolledUp = $state(false);
+  let scrollLock = false;  // When true, don't preserve scroll (after programmatic scrollToBottom)
+  let scrollLockTimer: ReturnType<typeof setTimeout> | null = null;
   let showFloatingInput = $state(_stored?.open ?? false);
   let floatingInputText = $state(_stored?.text ?? '');
   let floatingInputEl: HTMLTextAreaElement | undefined = $state();
@@ -164,26 +166,41 @@
       setTimeout(() => containerEl.classList.remove('bell'), 200);
     });
 
-    // Track scroll position to show/hide scroll-to-bottom button
+    // Track scroll position + detect active scrolling (wheel momentum / touch inertia)
+    let userScrolling = false;
+    let userScrollTimer: ReturnType<typeof setTimeout> | null = null;
+
     function updateScrollState() {
       const buf = terminal.buffer.active;
       isScrolledUp = buf.viewportY < buf.baseY;
     }
-    containerEl.addEventListener('wheel', () => requestAnimationFrame(updateScrollState), { passive: true });
-    containerEl.addEventListener('touchend', () => requestAnimationFrame(updateScrollState), { passive: true });
+    function onUserScroll(settleMs: number) {
+      scrollLock = false;
+      userScrolling = true;
+      if (userScrollTimer) clearTimeout(userScrollTimer);
+      userScrollTimer = setTimeout(() => { userScrolling = false; }, settleMs);
+      requestAnimationFrame(updateScrollState);
+    }
+    containerEl.addEventListener('wheel', () => onUserScroll(200), { passive: true });
+    containerEl.addEventListener('touchstart', () => { scrollLock = false; userScrolling = true; if (userScrollTimer) clearTimeout(userScrollTimer); }, { passive: true });
+    containerEl.addEventListener('touchend', () => onUserScroll(1000), { passive: true });
     terminal.onScroll(updateScrollState);
+    cleanups.push(() => { if (userScrollTimer) clearTimeout(userScrollTimer); });
 
-    // Terminal output: preserve scroll position if user has scrolled up.
-    // Check xterm's actual buffer state — no external flags that can desync.
+    // Terminal output: preserve scroll via DOM scrollTop (bypasses xterm.js internals).
+    // Don't preserve during active scroll (would fight momentum/inertia).
+    const viewport = containerEl.querySelector('.xterm-viewport') as HTMLElement;
     cleanups.push(wsManager.on('terminal:output', (msg) => {
       if (msg.terminalId !== terminalId) return;
-      const buf = terminal.buffer.active;
-      const wasScrolledUp = buf.viewportY < buf.baseY;
-      const savedY = buf.viewportY;
-      terminal.write(msg.data);
-      // Only restore if user was scrolled up AND xterm moved the viewport
-      if (wasScrolledUp && terminal.buffer.active.viewportY !== savedY) {
-        terminal.scrollToLine(savedY);
+      if (scrollLock || userScrolling) {
+        terminal.write(msg.data);
+      } else {
+        const savedTop = viewport.scrollTop;
+        const wasScrolledUp = terminal.buffer.active.viewportY < terminal.buffer.active.baseY;
+        terminal.write(msg.data);
+        if (wasScrolledUp) {
+          viewport.scrollTop = savedTop;
+        }
       }
       updateScrollState();
     }));
@@ -191,7 +208,7 @@
     cleanups.push(wsManager.on('terminal:buffered', (msg) => {
       if (msg.terminalId !== terminalId) return;
       terminal.write(msg.data);
-      terminal.scrollToBottom();
+      doScrollToBottom();
     }));
 
     // Terminal exit
@@ -339,6 +356,15 @@
     wsManager.send({ type: 'terminal:input', terminalId, data });
   }
 
+  /** Scroll to bottom and disable scroll preservation briefly so output keeps following */
+  function doScrollToBottom() {
+    terminal?.scrollToBottom();
+    scrollLock = true;
+    if (scrollLockTimer) clearTimeout(scrollLockTimer);
+    scrollLockTimer = setTimeout(() => { scrollLock = false; }, 500);
+    isScrolledUp = false;
+  }
+
   function sendFloatingInput() {
     const trimmed = floatingInputText.trimEnd();
     if (!trimmed) return;
@@ -346,7 +372,7 @@
     wsManager.send({ type: 'terminal:input', terminalId, data });
     floatingInputText = '';
     floatingInputEl?.focus();
-    setTimeout(() => terminal?.scrollToBottom(), 50);
+    setTimeout(doScrollToBottom, 50);
   }
 
   function clearFloatingInput() {
@@ -423,7 +449,7 @@
   {#if !showFloatingInput}
     <div class="bottom-btns">
       {#if isScrolledUp}
-        <button class="scroll-bottom-btn" title="Scroll to bottom" onpointerdown={(e) => e.preventDefault()} onclick={() => terminal?.scrollToBottom()}>&#x2193;</button>
+        <button class="scroll-bottom-btn" title="Scroll to bottom" onpointerdown={(e) => e.preventDefault()} onclick={doScrollToBottom}>&#x2193;</button>
       {/if}
       <button class="side-btn compose-btn" title="Compose input" onclick={toggleFloatingInput}>&#x270E;</button>
     </div>
@@ -431,7 +457,7 @@
 
   {#if showFloatingInput}
     {#if isScrolledUp}
-      <button class="scroll-bottom-btn floating-scroll" title="Scroll to bottom" onpointerdown={(e) => e.preventDefault()} onclick={() => terminal?.scrollToBottom()}>&#x2193;</button>
+      <button class="scroll-bottom-btn floating-scroll" title="Scroll to bottom" onpointerdown={(e) => e.preventDefault()} onclick={doScrollToBottom}>&#x2193;</button>
     {/if}
     <div class="floating-input" class:floating-mobile={uiState.isMobile}>
       <textarea
