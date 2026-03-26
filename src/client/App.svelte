@@ -20,6 +20,24 @@
 
   let fuzzyOpen = $state(false);
 
+  function activePaneLabel(): { project: string; name: string } {
+    const pane = appState.activePane;
+    if (!pane) return { project: '', name: '' };
+    for (const p of appState.projects) {
+      if (pane.type === 'terminal') {
+        const t = p.terminals.find(t => t.id === pane.id);
+        if (t) return { project: p.name, name: t.title_override || t.title || t.name };
+      } else if (pane.type === 'note') {
+        const n = p.notes.find(n => n.id === pane.id);
+        if (n) return { project: p.name, name: n.name };
+      } else if (pane.type === 'iframe') {
+        const f = p.iframes.find(f => f.id === pane.id);
+        if (f) return { project: p.name, name: f.name };
+      }
+    }
+    return { project: '', name: '' };
+  }
+
   function setTerminalActivity(terminalId: number, active: boolean) {
     for (const p of appState.projects) {
       const t = p.terminals.find(t => t.id === terminalId);
@@ -272,7 +290,13 @@
     <div class="mobile-layout">
       <div class="mobile-header">
         <button class="mobile-menu-btn" onclick={() => uiState.toggleDrawer()}>&#9776;</button>
-        <span class="mobile-title">Dopamine</span>
+        <span class="mobile-title">
+          {#if activePaneLabel().project}<span class="mobile-project">{activePaneLabel().project}</span>{/if}{activePaneLabel().name}
+        </span>
+        <button class="mobile-fullscreen-btn" onclick={() => {
+          if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+          else document.exitFullscreen();
+        }}>&#x26F6;</button>
       </div>
       <div class="mobile-content" id="mobile-content">
         {#if appState.activePane?.type === 'terminal'}
@@ -353,7 +377,9 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 12px;
+    padding: 2px 12px;
+    margin-left: env(safe-area-inset-left, 0px);
+    margin-right: env(safe-area-inset-right, 0px);
     background: var(--bg-elevated);
     border-bottom: 1px solid var(--border-subtle);
     flex-shrink: 0;
@@ -362,16 +388,37 @@
     border: none;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 18px;
+    font-size: 16px;
     cursor: pointer;
-    padding: 4px;
+    padding: 2px;
   }
   .mobile-title {
-    font-size: 14px;
+    flex: 1;
+    font-size: 12px;
     font-weight: 500;
     color: var(--text-secondary);
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .mobile-project {
+    color: var(--text-tertiary);
+    margin-right: 4px;
+  }
+  .mobile-project::after {
+    content: '/';
+    margin-left: 4px;
+  }
+  .mobile-fullscreen-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px;
+    flex-shrink: 0;
   }
   .mobile-content {
     flex: 1;

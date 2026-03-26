@@ -22,6 +22,7 @@
   const _stored = floatingInputStore.get(terminalId);
 
   let containerEl: HTMLDivElement;
+  let touchOverlayEl: HTMLDivElement;
   let terminal: Terminal;
   let fitAddon: FitAddon;
   let searchAddon: SearchAddon;
@@ -35,8 +36,6 @@
   let exitCode = $state<number | null>(null);
   let showDropOverlay = $state(false);
   let isScrolledUp = $state(false);
-  let scrollLock = false;  // When true, don't preserve scroll (after programmatic scrollToBottom)
-  let scrollLockTimer: ReturnType<typeof setTimeout> | null = null;
   let showFloatingInput = $state(_stored?.open ?? false);
   let floatingInputText = $state(_stored?.text ?? '');
   let floatingInputEl: HTMLTextAreaElement | undefined = $state();
@@ -166,49 +165,104 @@
       setTimeout(() => containerEl.classList.remove('bell'), 200);
     });
 
-    // Track scroll position + detect active scrolling (wheel momentum / touch inertia)
-    let userScrolling = false;
-    let userScrollTimer: ReturnType<typeof setTimeout> | null = null;
-
+    // Track whether user is scrolled up
     function updateScrollState() {
       const buf = terminal.buffer.active;
       isScrolledUp = buf.viewportY < buf.baseY;
     }
-    function onUserScroll(settleMs: number) {
-      scrollLock = false;
-      userScrolling = true;
-      if (userScrollTimer) clearTimeout(userScrollTimer);
-      userScrollTimer = setTimeout(() => { userScrolling = false; }, settleMs);
-      requestAnimationFrame(updateScrollState);
-    }
-    containerEl.addEventListener('wheel', () => onUserScroll(200), { passive: true });
-    containerEl.addEventListener('touchstart', () => { scrollLock = false; userScrolling = true; if (userScrollTimer) clearTimeout(userScrollTimer); }, { passive: true });
-    containerEl.addEventListener('touchend', () => onUserScroll(1000), { passive: true });
     terminal.onScroll(updateScrollState);
-    cleanups.push(() => { if (userScrollTimer) clearTimeout(userScrollTimer); });
 
-    // Terminal output: preserve scroll via DOM scrollTop (bypasses xterm.js internals).
-    // Don't preserve during active scroll (would fight momentum/inertia).
-    const viewport = containerEl.querySelector('.xterm-viewport') as HTMLElement;
+    // Mobile: touch scroll overlay — intercepts swipe gestures, drives terminal.scrollLines()
+    if (uiState.isMobile && touchOverlayEl) {
+      let touchStartY = 0;
+      let touchStartX = 0;
+      let lastTouchY = 0;
+      let lastTouchTime = 0;
+      let isSwiping = false;
+      let touchAccum = 0;
+      let velocity = 0;
+      let momentumRaf = 0;
+
+      const getLineHeight = () => containerEl.clientHeight / terminal.rows;
+
+      touchOverlayEl.addEventListener('touchstart', (e) => {
+        cancelAnimationFrame(momentumRaf);
+        velocity = 0;
+        touchAccum = 0;
+        touchStartY = e.touches[0].clientY;
+        touchStartX = e.touches[0].clientX;
+        lastTouchY = touchStartY;
+        lastTouchTime = performance.now();
+        isSwiping = false;
+      }, { passive: true });
+
+      touchOverlayEl.addEventListener('touchmove', (e) => {
+        const y = e.touches[0].clientY;
+        const deltaY = lastTouchY - y;
+
+        if (!isSwiping) {
+          const totalDY = Math.abs(y - touchStartY);
+          const totalDX = Math.abs(e.touches[0].clientX - touchStartX);
+          if (totalDY > 10 && totalDY > totalDX) isSwiping = true;
+        }
+
+        if (isSwiping) {
+          e.preventDefault();
+          const now = performance.now();
+          const dt = now - lastTouchTime;
+          if (dt > 0) velocity = deltaY / dt;
+          lastTouchTime = now;
+          lastTouchY = y;
+
+          touchAccum += deltaY;
+          const lh = getLineHeight();
+          const lines = Math.trunc(touchAccum / lh);
+          if (lines !== 0) {
+            terminal.scrollLines(lines);
+            touchAccum -= lines * lh;
+            updateScrollState();
+          }
+        }
+      }, { passive: false });
+
+      touchOverlayEl.addEventListener('touchend', () => {
+        if (isSwiping) {
+          // Momentum scrolling
+          const lh = getLineHeight();
+          const decel = 0.95;
+          function momentumStep() {
+            velocity *= decel;
+            touchAccum += velocity * 16;
+            const lines = Math.trunc(touchAccum / lh);
+            if (lines !== 0) {
+              terminal.scrollLines(lines);
+              touchAccum -= lines * lh;
+              updateScrollState();
+            }
+            if (Math.abs(velocity) > 0.01) {
+              momentumRaf = requestAnimationFrame(momentumStep);
+            }
+          }
+          momentumRaf = requestAnimationFrame(momentumStep);
+        } else {
+          // Tap — focus terminal for keyboard
+          terminal.focus();
+        }
+      }, { passive: true });
+
+      cleanups.push(() => cancelAnimationFrame(momentumRaf));
+    }
+
+    // Terminal output → xterm.js (native scroll handling)
     cleanups.push(wsManager.on('terminal:output', (msg) => {
       if (msg.terminalId !== terminalId) return;
-      if (scrollLock || userScrolling) {
-        terminal.write(msg.data);
-      } else {
-        const savedTop = viewport.scrollTop;
-        const wasScrolledUp = terminal.buffer.active.viewportY < terminal.buffer.active.baseY;
-        terminal.write(msg.data);
-        if (wasScrolledUp) {
-          viewport.scrollTop = savedTop;
-        }
-      }
-      updateScrollState();
+      terminal.write(msg.data);
     }));
 
     cleanups.push(wsManager.on('terminal:buffered', (msg) => {
       if (msg.terminalId !== terminalId) return;
       terminal.write(msg.data);
-      doScrollToBottom();
+      terminal.scrollToBottom();
     }));
 
     // Terminal exit
@@ -356,12 +410,8 @@
     wsManager.send({ type: 'terminal:input', terminalId, data });
   }
 
-  /** Scroll to bottom and disable scroll preservation briefly so output keeps following */
   function doScrollToBottom() {
     terminal?.scrollToBottom();
-    scrollLock = true;
-    if (scrollLockTimer) clearTimeout(scrollLockTimer);
-    scrollLockTimer = setTimeout(() => { scrollLock = false; }, 500);
     isScrolledUp = false;
   }
 
@@ -372,7 +422,6 @@
     wsManager.send({ type: 'terminal:input', terminalId, data });
     floatingInputText = '';
     floatingInputEl?.focus();
-    setTimeout(doScrollToBottom, 50);
   }
 
   function clearFloatingInput() {
@@ -380,27 +429,13 @@
     floatingInputEl?.focus();
   }
 
-  function restoreScroll(distFromBottom: number) {
-    try { fitAddon.fit(); } catch {}
-    const newBase = terminal.buffer.active.baseY;
-    terminal.scrollToLine(Math.max(0, newBase - distFromBottom));
-  }
-
   function toggleFloatingInput() {
-    // Save distance from bottom BEFORE toggle
-    const buf = terminal?.buffer.active;
-    const distFromBottom = buf ? buf.baseY - buf.viewportY : 0;
     showFloatingInput = !showFloatingInput;
     if (showFloatingInput) {
       tick().then(() => floatingInputEl?.focus());
     } else {
       terminal?.focus();
     }
-    // Restore scroll after refit
-    tick().then(() => {
-      restoreScroll(distFromBottom);
-      setTimeout(() => restoreScroll(distFromBottom), 100);
-    });
   }
 
   onDestroy(() => {
@@ -412,7 +447,14 @@
 </script>
 
 <div class="terminal-wrapper">
-  <div class="terminal-container" bind:this={containerEl}></div>
+  <div class="terminal-container" bind:this={containerEl}>
+    {#if uiState.isMobile}
+      <div class="touch-scroll-overlay" bind:this={touchOverlayEl}></div>
+    {/if}
+    {#if isScrolledUp && showFloatingInput}
+      <button class="scroll-bottom-btn floating-scroll" title="Scroll to bottom" onpointerdown={(e) => e.preventDefault()} onclick={doScrollToBottom}>&#x2193;</button>
+    {/if}
+  </div>
 
   {#if showSearch}
     <div class="search-bar">
@@ -456,9 +498,6 @@
   {/if}
 
   {#if showFloatingInput}
-    {#if isScrolledUp}
-      <button class="scroll-bottom-btn floating-scroll" title="Scroll to bottom" onpointerdown={(e) => e.preventDefault()} onclick={doScrollToBottom}>&#x2193;</button>
-    {/if}
     <div class="floating-input" class:floating-mobile={uiState.isMobile}>
       <textarea
         bind:this={floatingInputEl}
@@ -527,14 +566,28 @@
     flex-direction: column;
   }
   .terminal-container {
+    position: relative;
     width: 100%;
     flex: 1;
     min-height: 0;
     background: #282828;
+    touch-action: manipulation;
+    overscroll-behavior: contain;
   }
   .terminal-container :global(.xterm) {
     padding: 4px;
     height: 100%;
+  }
+  .terminal-container :global(.xterm-viewport) {
+    overscroll-behavior: contain;
+  }
+
+  /* Mobile: transparent overlay captures touch swipe, drives scroll via JS */
+  .touch-scroll-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    touch-action: none;
   }
   .terminal-container.bell {
     outline: 1px solid var(--yellow);
@@ -698,12 +751,12 @@
     color: var(--text-primary);
   }
 
-  /* When textarea is open: in flow above the floating input, right-aligned */
+  /* When textarea is open: anchored inside terminal-container */
   .floating-scroll {
-    align-self: flex-end;
-    flex-shrink: 0;
-    margin-right: 6px;
-    margin-bottom: 8px;
+    position: absolute;
+    right: 6px;
+    bottom: 8px;
+    z-index: 3;
   }
 
   /* When textarea is closed: stacked with compose toggle */
