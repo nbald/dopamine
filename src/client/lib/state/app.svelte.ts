@@ -47,13 +47,19 @@ const LS_EXPANDED = 'dopamine:expandedProjects';
 
 class AppState {
   projects = $state<Project[]>([]);
-  activePane = $state<PaneContent>(null);
   hostname = $state('');
   onPaneRemoved: ((type: string, id: number) => void) | null = null;
 
-  saveView() {
+  private _activePane = $state<PaneContent>(null);
+
+  get activePane(): PaneContent { return this._activePane; }
+  set activePane(v: PaneContent) {
+    this._activePane = v;
+    try { localStorage.setItem(LS_ACTIVE_PANE, JSON.stringify(v)); } catch {}
+  }
+
+  saveExpandedState() {
     try {
-      localStorage.setItem(LS_ACTIVE_PANE, JSON.stringify(this.activePane));
       const expanded: Record<number, boolean> = {};
       for (const p of this.projects) expanded[p.id] = !!p.expanded;
       localStorage.setItem(LS_EXPANDED, JSON.stringify(expanded));
@@ -89,13 +95,16 @@ class AppState {
       full.push({ ...p, expanded: true, terminals, notes, iframes });
     }
 
-    // Restore expanded states from localStorage or previous load
-    const savedExpanded = this.restoreExpanded();
+    // Restore expanded states from localStorage, then overlay in-memory flags
+    const savedExpanded = this.restoreExpanded() ?? {};
     for (const p of full) {
+      // Restore expanded from localStorage (source of truth)
+      if (p.id in savedExpanded) {
+        p.expanded = savedExpanded[p.id];
+      }
+      // Preserve per-terminal runtime flags from previous in-memory state
       const prev = this.projects.find(pp => pp.id === p.id);
       if (prev) {
-        p.expanded = prev.expanded;
-        // Preserve per-terminal flags
         for (const t of p.terminals) {
           const prevT = prev.terminals.find(pt => pt.id === t.id);
           if (prevT) {
@@ -103,8 +112,6 @@ class AppState {
             t.hasActivity = prevT.hasActivity;
           }
         }
-      } else if (savedExpanded && p.id in savedExpanded) {
-        p.expanded = savedExpanded[p.id];
       }
     }
 
@@ -279,7 +286,10 @@ class AppState {
 
   toggleProject(id: number) {
     const project = this.projects.find(p => p.id === id);
-    if (project) project.expanded = !project.expanded;
+    if (project) {
+      project.expanded = !project.expanded;
+      this.saveExpandedState();
+    }
   }
 
   async renameProject(id: number, name: string) {

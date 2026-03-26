@@ -241,13 +241,11 @@
     };
   });
 
-  // Persist active view to localStorage
+  // Persist expanded states to localStorage (activePane is saved synchronously via setter)
   $effect(() => {
-    if (state !== 'app') return;
-    // Track activePane and expanded states
-    const _pane = appState.activePane;
+    if (state !== 'app' || appState.projects.length === 0) return;
     const _projects = appState.projects.map(p => p.expanded);
-    appState.saveView();
+    appState.saveExpandedState();
   });
 
   // When sidebar changes activePane, assign to focused leaf (desktop) or just track (mobile)
