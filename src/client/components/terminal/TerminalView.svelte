@@ -152,6 +152,8 @@
 
     terminal.onResize(({ cols, rows }) => {
       sendResize(cols, rows);
+      terminal.scrollToBottom();
+      isScrolledUp = false;
     });
 
     // On first focus, claim size
@@ -422,6 +424,7 @@
     wsManager.send({ type: 'terminal:input', terminalId, data });
     floatingInputText = '';
     floatingInputEl?.focus();
+    setTimeout(doScrollToBottom, 50);
   }
 
   function clearFloatingInput() {
