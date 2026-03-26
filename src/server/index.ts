@@ -17,6 +17,7 @@ import iframeRoutes from './routes/iframe.routes.js';
 import workspaceRoutes from './routes/workspace.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
 import claudeRoutes from './routes/claude.routes.js';
+import historyRoutes from './routes/history.routes.js';
 import { setupWebSocket, setWss } from './ws/handler.js';
 import { ptyManager } from './services/pty-manager.js';
 
@@ -48,6 +49,7 @@ app.use('/api', iframeRoutes);
 app.use('/api', workspaceRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api', claudeRoutes);
+app.use('/api', historyRoutes);
 
 // Serve frontend in production
 if (config.isProd) {

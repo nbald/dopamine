@@ -14,6 +14,34 @@
   }
 
   const floatingInputStore = loadStore();
+
+  let inputHistory: string[] = [];
+
+  async function fetchHistory() {
+    try {
+      const res = await fetch('/api/history', { credentials: 'same-origin' });
+      if (res.ok) inputHistory = await res.json();
+    } catch {}
+  }
+
+  async function pushHistory(text: string) {
+    // Optimistic local update
+    const idx = inputHistory.indexOf(text);
+    if (idx !== -1) inputHistory.splice(idx, 1);
+    inputHistory.push(text);
+    if (inputHistory.length > 20) inputHistory.splice(0, inputHistory.length - 20);
+    try {
+      await fetch('/api/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+        credentials: 'same-origin',
+      });
+    } catch {}
+  }
+
+  // Load history once on module init
+  fetchHistory();
 </script>
 
 <script lang="ts">
@@ -58,6 +86,8 @@
   let showDropOverlay = $state(false);
   let isScrolledUp = $state(false);
   let showFloatingInput = $state(_stored?.open ?? true);
+  let historyIndex = $state(-1);
+  let savedDraft = $state('');
   let floatingInputText = $state(_stored?.text ?? '');
   let floatingInputEl: HTMLTextAreaElement | undefined = $state();
 
@@ -448,13 +478,45 @@
     if (!trimmed) {
       wsManager.send({ type: 'terminal:input', terminalId, data: '\r' });
       setTimeout(doScrollToBottom, 50);
+      historyIndex = -1;
       return;
     }
+    pushHistory(trimmed);
+    historyIndex = -1;
+    savedDraft = '';
     const data = trimmed.replace(/\n/g, '\r') + '\r';
     wsManager.send({ type: 'terminal:input', terminalId, data });
     floatingInputText = '';
     floatingInputEl?.focus();
     setTimeout(doScrollToBottom, 50);
+  }
+
+  function navigateHistory(direction: 'up' | 'down') {
+    if (inputHistory.length === 0) return;
+
+    if (direction === 'up') {
+      if (historyIndex === -1) {
+        savedDraft = floatingInputText;
+        historyIndex = inputHistory.length - 1;
+      } else if (historyIndex > 0) {
+        historyIndex--;
+      }
+      floatingInputText = inputHistory[historyIndex];
+    } else {
+      if (historyIndex === -1) return;
+      if (historyIndex < inputHistory.length - 1) {
+        historyIndex++;
+        floatingInputText = inputHistory[historyIndex];
+      } else {
+        historyIndex = -1;
+        floatingInputText = savedDraft;
+      }
+    }
+
+    // Keep cursor at position 0
+    tick().then(() => {
+      if (floatingInputEl) floatingInputEl.selectionStart = floatingInputEl.selectionEnd = 0;
+    });
   }
 
   function clearFloatingInput() {
@@ -560,6 +622,10 @@
           }
           if (e.key === 'Escape') {
             toggleFloatingInput();
+          }
+          if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && floatingInputEl?.selectionStart === 0 && floatingInputEl?.selectionEnd === 0) {
+            e.preventDefault();
+            navigateHistory(e.key === 'ArrowUp' ? 'up' : 'down');
           }
         }}
       ></textarea>
