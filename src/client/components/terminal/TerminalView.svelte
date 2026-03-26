@@ -423,7 +423,11 @@
 
   function sendFloatingInput() {
     const trimmed = floatingInputText.trimEnd();
-    if (!trimmed) return;
+    if (!trimmed) {
+      wsManager.send({ type: 'terminal:input', terminalId, data: '\r' });
+      setTimeout(doScrollToBottom, 50);
+      return;
+    }
     const data = trimmed.replace(/\n/g, '\r') + '\r';
     wsManager.send({ type: 'terminal:input', terminalId, data });
     floatingInputText = '';
