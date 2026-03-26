@@ -1,6 +1,19 @@
 <script module lang="ts">
-  // Persists across component mount/unmount — each terminal keeps its floating input state
-  const floatingInputStore = new Map<number, { open: boolean; text: string }>();
+  const LS_KEY = 'dopamine:floatingInput';
+
+  function loadStore(): Map<number, { open: boolean; text: string }> {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) return new Map(JSON.parse(raw));
+    } catch {}
+    return new Map();
+  }
+
+  function saveStore(store: Map<number, { open: boolean; text: string }>) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify([...store])); } catch {}
+  }
+
+  const floatingInputStore = loadStore();
 </script>
 
 <script lang="ts">
@@ -17,6 +30,14 @@
   import '@xterm/xterm/css/xterm.css';
 
   let { terminalId }: { terminalId: number } = $props();
+
+  let terminalLabel = $derived.by(() => {
+    for (const p of appState.projects) {
+      const t = p.terminals.find(t => t.id === terminalId);
+      if (t) return `${t.emoji} ${t.name} | ${p.name}`;
+    }
+    return '';
+  });
 
   // Persistent per-terminal floating input state (survives component destroy/recreate)
   const _stored = floatingInputStore.get(terminalId);
@@ -40,9 +61,10 @@
   let floatingInputText = $state(_stored?.text ?? '');
   let floatingInputEl: HTMLTextAreaElement | undefined = $state();
 
-  // Sync floating input state back to persistent store
+  // Sync floating input state back to persistent store + localStorage
   $effect(() => {
     floatingInputStore.set(terminalId, { open: showFloatingInput, text: floatingInputText });
+    saveStore(floatingInputStore);
   });
 
   onMount(() => {
@@ -510,6 +532,7 @@
 
   {#if showFloatingInput}
     <div class="floating-input" class:floating-mobile={uiState.isMobile}>
+      <div class="textarea-wrap">
       <textarea
         bind:this={floatingInputEl}
         bind:value={floatingInputText}
@@ -540,6 +563,10 @@
           }
         }}
       ></textarea>
+      {#if !floatingInputText && terminalLabel}
+        <span class="textarea-label">{terminalLabel}</span>
+      {/if}
+      </div>
       {#if uiState.isMobile}
         <div class="compose-bar" onpointerdown={(e) => { if (!(e.target as HTMLElement).closest('.kb-toggle')) e.preventDefault(); }}>
           <div class="compose-bar-side">
@@ -851,6 +878,25 @@
   .bar-btn.muted-btn {
     opacity: 0.7;
   }
+  .textarea-wrap {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .textarea-label {
+    position: absolute;
+    bottom: 8px;
+    left: 10px;
+    font-size: 13px;
+    color: #fff;
+    opacity: 0.45;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
   .floating-textarea {
     flex: 1;
     min-width: 0;

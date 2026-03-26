@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db.js';
 import { sanitizeName } from '../utils/sanitize.js';
+import { assignProjectCategory } from '../utils/emoji.js';
 
 const router = Router();
 
@@ -17,12 +18,14 @@ router.post('/projects', (req, res) => {
   }
 
   const max = getDb().prepare('SELECT COALESCE(MAX(sort_order), -1) as m FROM projects').get() as { m: number };
-  const result = getDb().prepare('INSERT INTO projects (name, sort_order) VALUES (?, ?)').run(name, max.m + 1);
+  const emoji_category = assignProjectCategory(getDb());
+  const result = getDb().prepare('INSERT INTO projects (name, sort_order, emoji_category) VALUES (?, ?, ?)').run(name, max.m + 1, emoji_category);
 
   res.status(201).json({
     id: Number(result.lastInsertRowid),
     name,
     sort_order: max.m + 1,
+    emoji_category,
   });
 });
 

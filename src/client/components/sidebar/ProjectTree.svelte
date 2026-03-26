@@ -134,8 +134,8 @@
           ondragend={onDragEnd}
           onclick={() => appState.activePane = { type: 'terminal', id: t.id }}
         >
-          <span class="icon">&gt;_</span>
-          <span class="label" use:inlineEdit={{ value: t.title_override || t.name, onSave: (v) => appState.renameTerminal(t.id, v) }}>{t.title_override || t.title || t.name}</span>
+          <span class="icon">{t.emoji}</span>
+          <span class="label" use:inlineEdit={{ value: t.name, onSave: (v) => appState.renameTerminal(t.id, v) }}>{t.claudePrefix ? t.claudePrefix + ' ' : ''}{t.name}</span>
           {#if t.isStopping}
             <span class="stopping-dot"></span>
           {:else if t.hasActivity}
@@ -164,7 +164,7 @@
           ondragend={onDragEnd}
           onclick={() => appState.activePane = { type: 'note', id: n.id }}
         >
-          <span class="icon">&#9776;</span>
+          <span class="icon">{n.emoji}</span>
           <span class="label" use:inlineEdit={{ value: n.name, onSave: (v) => appState.renameNote(n.id, v) }}>{n.name}</span>
           <button
             class="item-del"
@@ -189,7 +189,7 @@
           class:active={isActive('iframe', i.id)}
           onclick={() => appState.activePane = { type: 'iframe', id: i.id }}
         >
-          <span class="icon icon-nowrap">&lt;/&gt;</span>
+          <span class="icon">{i.emoji}</span>
           <span class="label" use:inlineEdit={{ value: i.name, onSave: (v) => appState.renameIframe(i.id, v) }}>{i.name}</span>
           <button
             class="item-del"

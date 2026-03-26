@@ -20,23 +20,25 @@
 
   let fuzzyOpen = $state(false);
 
-  function activePaneLabel(): { project: string; name: string } {
+  function activePaneLabel(): { project: string; emoji: string; name: string; claudePrefix: string } {
     const pane = appState.activePane;
-    if (!pane) return { project: '', name: '' };
+    if (!pane) return { project: '', emoji: '', name: '', claudePrefix: '' };
     for (const p of appState.projects) {
       if (pane.type === 'terminal') {
         const t = p.terminals.find(t => t.id === pane.id);
-        if (t) return { project: p.name, name: t.title_override || t.title || t.name };
+        if (t) return { project: p.name, emoji: t.emoji, name: t.name, claudePrefix: t.claudePrefix || '' };
       } else if (pane.type === 'note') {
         const n = p.notes.find(n => n.id === pane.id);
-        if (n) return { project: p.name, name: n.name };
+        if (n) return { project: p.name, emoji: n.emoji, name: n.name, claudePrefix: '' };
       } else if (pane.type === 'iframe') {
         const f = p.iframes.find(f => f.id === pane.id);
-        if (f) return { project: p.name, name: f.name };
+        if (f) return { project: p.name, emoji: f.emoji, name: f.name, claudePrefix: '' };
       }
     }
-    return { project: '', name: '' };
+    return { project: '', emoji: '', name: '', claudePrefix: '' };
   }
+
+  let mobileInfo = $derived(activePaneLabel());
 
   function setTerminalActivity(terminalId: number, active: boolean) {
     for (const p of appState.projects) {
@@ -204,12 +206,19 @@
     let titleTrailing = new Map<number, ReturnType<typeof setTimeout>>();
 
     const unsub = wsManager.on('terminal:title', (msg) => {
+      // Extract leading non-letter symbols (Claude Code spinner/status)
+      // Skip ✳ (U+2733) — it means Claude is done, not working
+      const match = msg.title.match(/^([^\p{L}\d]+)/u);
+      const raw = match ? match[1].trimEnd() : '';
+      const prefix = raw === '\u2733' ? '' : raw;
+
       // Update document title immediately (cheap)
       if (appState.activePane?.type === 'terminal' && appState.activePane.id === msg.terminalId) {
         for (const p of appState.projects) {
           const t = p.terminals.find(t => t.id === msg.terminalId);
-          if (t && !t.title_override) {
-            document.title = `${msg.title} — Dopamine`;
+          if (t) {
+            const display = prefix ? `${prefix} ${t.name}` : t.name;
+            document.title = `${display} — Dopamine`;
           }
         }
       }
@@ -218,21 +227,21 @@
       const now = Date.now();
       const lastUpdate = titleLastUpdate.get(msg.terminalId) || 0;
 
-      function applyTitle() {
+      function applyPrefix() {
         for (const p of appState.projects) {
           const t = p.terminals.find(t => t.id === msg.terminalId);
-          if (t && !t.title_override) t.title = msg.title;
+          if (t) t.claudePrefix = prefix;
         }
       }
 
       if (now - lastUpdate >= 100) {
         titleLastUpdate.set(msg.terminalId, now);
-        applyTitle();
+        applyPrefix();
       }
       // Always schedule a trailing update to catch the final state
       const existing = titleTrailing.get(msg.terminalId);
       if (existing) clearTimeout(existing);
-      titleTrailing.set(msg.terminalId, setTimeout(applyTitle, 150));
+      titleTrailing.set(msg.terminalId, setTimeout(applyPrefix, 150));
     });
 
     return () => {
@@ -289,7 +298,7 @@
       <div class="mobile-header">
         <button class="mobile-menu-btn" onclick={() => uiState.toggleDrawer()}>&#9776;</button>
         <span class="mobile-title">
-          {#if activePaneLabel().project}<span class="mobile-project">{activePaneLabel().project}</span>{/if}{activePaneLabel().name}
+          {mobileInfo.emoji} {mobileInfo.claudePrefix ? mobileInfo.claudePrefix + ' ' : ''}{mobileInfo.name}{#if mobileInfo.project}<span class="mobile-sep">|</span><span class="mobile-secondary">{mobileInfo.project}</span>{/if}
         </span>
         <button class="mobile-fullscreen-btn" onclick={() => {
           if (!document.fullscreenElement) document.documentElement.requestFullscreen();
@@ -401,13 +410,12 @@
     white-space: nowrap;
     min-width: 0;
   }
-  .mobile-project {
-    color: var(--text-tertiary);
-    margin-right: 4px;
+  .mobile-sep {
+    opacity: 0.3;
+    margin: 0 6px;
   }
-  .mobile-project::after {
-    content: '/';
-    margin-left: 4px;
+  .mobile-secondary {
+    opacity: 0.5;
   }
   .mobile-fullscreen-btn {
     border: none;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db.js';
 import { ptyManager } from '../services/pty-manager.js';
+import { assignPanelEmoji, generatePanelName } from '../utils/emoji.js';
 
 const router = Router();
 
@@ -8,7 +9,7 @@ const router = Router();
 router.get('/projects/:pid/terminals', (req, res) => {
   const { pid } = req.params;
   const rows = getDb().prepare(
-    'SELECT id, project_id, name, title_override, sort_order, cwd, exit_code, is_dead, cols, rows, created_at, updated_at FROM terminals WHERE project_id = ? ORDER BY sort_order'
+    'SELECT id, project_id, name, title_override, emoji, sort_order, cwd, exit_code, is_dead, cols, rows, created_at, updated_at FROM terminals WHERE project_id = ? ORDER BY sort_order'
   ).all(Number(pid));
 
   // Augment with live info
@@ -29,16 +30,17 @@ router.get('/projects/:pid/terminals', (req, res) => {
 router.post('/projects/:pid/terminals', (req, res) => {
   const { pid } = req.params;
   const { name, cwd } = req.body;
-  const terminalName = name || 'Terminal';
 
   // Get max sort_order
   const max = getDb().prepare(
     'SELECT COALESCE(MAX(sort_order), -1) as m FROM terminals WHERE project_id = ?'
   ).get(Number(pid)) as { m: number };
 
+  const emoji = assignPanelEmoji(getDb(), Number(pid));
+  const terminalName = name || generatePanelName(emoji);
   const result = getDb().prepare(
-    'INSERT INTO terminals (project_id, name, sort_order, cwd) VALUES (?, ?, ?, ?)'
-  ).run(Number(pid), terminalName, max.m + 1, cwd || null);
+    'INSERT INTO terminals (project_id, name, sort_order, cwd, emoji) VALUES (?, ?, ?, ?, ?)'
+  ).run(Number(pid), terminalName, max.m + 1, cwd || null, emoji);
 
   const terminalId = Number(result.lastInsertRowid);
 
@@ -49,6 +51,7 @@ router.post('/projects/:pid/terminals', (req, res) => {
     id: terminalId,
     project_id: Number(pid),
     name: terminalName,
+    emoji,
     isAlive: handle.alive,
     cwd: handle.getCwd(),
   });

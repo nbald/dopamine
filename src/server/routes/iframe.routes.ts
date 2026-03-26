@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db.js';
 import { sanitizeName, sanitizeUrl } from '../utils/sanitize.js';
+import { assignPanelEmoji, generatePanelName } from '../utils/emoji.js';
 
 const router = Router();
 
@@ -18,16 +19,19 @@ router.post('/projects/:pid/iframes', (req, res) => {
     'SELECT COALESCE(MAX(sort_order), -1) as m FROM iframes WHERE project_id = ?'
   ).get(pid) as { m: number };
 
+  const emoji = assignPanelEmoji(getDb(), pid);
+  const iframeName = name || generatePanelName(emoji);
   const result = getDb().prepare(
-    'INSERT INTO iframes (project_id, name, url, sort_order) VALUES (?, ?, ?, ?)'
-  ).run(pid, name || 'Preview', url || '', max.m + 1);
+    'INSERT INTO iframes (project_id, name, url, sort_order, emoji) VALUES (?, ?, ?, ?, ?)'
+  ).run(pid, iframeName, url || '', max.m + 1, emoji);
 
   res.status(201).json({
     id: Number(result.lastInsertRowid),
     project_id: pid,
-    name: name || 'Preview',
+    name: iframeName,
     url: url || '',
     sort_order: max.m + 1,
+    emoji,
   });
 });
 

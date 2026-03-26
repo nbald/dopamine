@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db.js';
+import { assignPanelEmoji, generatePanelName } from '../utils/emoji.js';
 
 const router = Router();
 
@@ -17,16 +18,19 @@ router.post('/projects/:pid/notes', (req, res) => {
     'SELECT COALESCE(MAX(sort_order), -1) as m FROM notes WHERE project_id = ?'
   ).get(pid) as { m: number };
 
+  const emoji = assignPanelEmoji(getDb(), pid);
+  const noteName = name || generatePanelName(emoji);
   const result = getDb().prepare(
-    'INSERT INTO notes (project_id, name, sort_order) VALUES (?, ?, ?)'
-  ).run(pid, name || 'Note', max.m + 1);
+    'INSERT INTO notes (project_id, name, sort_order, emoji) VALUES (?, ?, ?, ?)'
+  ).run(pid, noteName, max.m + 1, emoji);
 
   res.status(201).json({
     id: Number(result.lastInsertRowid),
     project_id: pid,
-    name: name || 'Note',
+    name: noteName,
     content: '',
     sort_order: max.m + 1,
+    emoji,
   });
 });
 

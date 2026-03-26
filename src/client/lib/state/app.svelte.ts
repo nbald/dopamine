@@ -4,6 +4,7 @@ export interface Project {
   id: number;
   name: string;
   sort_order: number;
+  emoji_category: string;
   expanded?: boolean;
   terminals: TerminalMeta[];
   notes: NoteMeta[];
@@ -14,18 +15,21 @@ export interface TerminalMeta {
   id: number;
   project_id: number;
   name: string;
+  emoji: string;
   title_override: string | null;
   isAlive: boolean;
   title: string;
   liveCwd: string | null;
   hasActivity?: boolean;
   isStopping?: boolean;
+  claudePrefix?: string;
 }
 
 export interface NoteMeta {
   id: number;
   project_id: number;
   name: string;
+  emoji: string;
   content: string;
 }
 
@@ -33,6 +37,7 @@ export interface IframeMeta {
   id: number;
   project_id: number;
   name: string;
+  emoji: string;
   url: string;
 }
 
@@ -189,7 +194,7 @@ class AppState {
       } catch {}
     }
 
-    const t = await api.post<any>(`/projects/${projectId}/terminals`, { name: name || 'Terminal', cwd });
+    const t = await api.post<any>(`/projects/${projectId}/terminals`, { name: name || undefined, cwd });
     const project = this.projects.find(p => p.id === projectId);
     if (project) project.terminals = [...project.terminals, t];
     this.activePane = { type: 'terminal', id: t.id };
@@ -247,7 +252,7 @@ class AppState {
   }
 
   async createNote(projectId: number, name?: string) {
-    const n = await api.post<any>(`/projects/${projectId}/notes`, { name: name || 'Note' });
+    const n = await api.post<any>(`/projects/${projectId}/notes`, { name: name || undefined });
     const project = this.projects.find(p => p.id === projectId);
     if (project) project.notes = [...project.notes, n];
     this.activePane = { type: 'note', id: n.id };
@@ -266,7 +271,7 @@ class AppState {
   }
 
   async createIframe(projectId: number, name?: string, url?: string) {
-    const i = await api.post<any>(`/projects/${projectId}/iframes`, { name: name || 'Preview', url: url || '' });
+    const i = await api.post<any>(`/projects/${projectId}/iframes`, { name: name || undefined, url: url || '' });
     const project = this.projects.find(p => p.id === projectId);
     if (project) project.iframes = [...project.iframes, i];
     this.activePane = { type: 'iframe', id: i.id };

@@ -23,6 +23,23 @@
     }
   }
 
+  let paneInfo = $derived.by(() => {
+    if (leaf.contentType === 'empty') return null;
+    for (const p of appState.projects) {
+      if (leaf.contentType === 'terminal') {
+        const t = p.terminals.find(t => t.id === leaf.contentId);
+        if (t) return { project: p.name, emoji: t.emoji, name: t.name, claudePrefix: t.claudePrefix || '' };
+      } else if (leaf.contentType === 'note') {
+        const n = p.notes.find(n => n.id === leaf.contentId);
+        if (n) return { project: p.name, emoji: n.emoji, name: n.name, claudePrefix: '' };
+      } else if (leaf.contentType === 'iframe') {
+        const i = p.iframes.find(i => i.id === leaf.contentId);
+        if (i) return { project: p.name, emoji: i.emoji, name: i.name || i.url, claudePrefix: '' };
+      }
+    }
+    return null;
+  });
+
   let closeProgress = $state(false);
   let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -51,27 +68,16 @@
   role="group"
 >
   <div class="pane-header">
-    {#if leaf.contentType === 'terminal'}
-      <span class="pane-icon">&gt;_</span>
-    {:else if leaf.contentType === 'note'}
-      <span class="pane-icon">&#9776;</span>
-    {:else if leaf.contentType === 'iframe'}
-      <span class="pane-icon icon-nowrap">&lt;/&gt;</span>
+    {#if paneInfo}
+      <span class="pane-title">
+        <span class="pane-panel">{paneInfo.emoji} {paneInfo.claudePrefix ? paneInfo.claudePrefix + ' ' : ''}{paneInfo.name}</span>
+        <span class="pane-sep">|</span>
+        <span class="pane-project">{paneInfo.project}</span>
+      </span>
     {:else}
       <span class="pane-icon">&#9633;</span>
+      <span class="pane-title">Empty</span>
     {/if}
-
-    <span class="pane-title">
-      {#if leaf.contentType === 'empty'}
-        Empty
-      {:else if leaf.contentType === 'terminal'}
-        {(() => { for (const p of appState.projects) { const t = p.terminals.find(t => t.id === leaf.contentId); if (t) return t.title_override || t.title || t.name; } return 'Terminal'; })()}
-      {:else if leaf.contentType === 'note'}
-        {(() => { for (const p of appState.projects) { const n = p.notes.find(n => n.id === leaf.contentId); if (n) return n.name; } return 'Note'; })()}
-      {:else if leaf.contentType === 'iframe'}
-        {(() => { for (const p of appState.projects) { const i = p.iframes.find(i => i.id === leaf.contentId); if (i) return i.name || i.url; } return 'Preview'; })()}
-      {/if}
-    </span>
 
     <div class="pane-actions">
       <button class="pane-btn" title="Split vertical" onclick={(e) => { e.stopPropagation(); layoutState.setFocus(leaf.id); layoutState.split('h'); }}>&#x2503;</button>
@@ -141,7 +147,6 @@
     font-size: 12px;
     opacity: 0.5;
   }
-  .icon-nowrap { white-space: nowrap; }
   .pane.focused .pane-icon { opacity: 0.9; }
 
   .pane-title {
@@ -150,7 +155,28 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    min-width: 0;
   }
+
+  .pane-project {
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+  .pane.focused .pane-project { opacity: 0.7; }
+
+  .pane-sep {
+    opacity: 0.3;
+    margin: 0 6px;
+    flex-shrink: 0;
+  }
+
+  .pane-panel {
+    flex-shrink: 0;
+  }
+
 
   .pane-actions {
     display: flex;
