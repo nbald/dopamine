@@ -36,7 +36,7 @@
   let exitCode = $state<number | null>(null);
   let showDropOverlay = $state(false);
   let isScrolledUp = $state(false);
-  let showFloatingInput = $state(_stored?.open ?? false);
+  let showFloatingInput = $state(_stored?.open ?? true);
   let floatingInputText = $state(_stored?.text ?? '');
   let floatingInputEl: HTMLTextAreaElement | undefined = $state();
 
@@ -112,7 +112,11 @@
     }
 
     // Fit after load
-    setTimeout(() => { doFit(); terminal.focus(); }, 100);
+    setTimeout(() => {
+      doFit();
+      if (showFloatingInput && floatingInputEl) floatingInputEl.focus();
+      else terminal.focus();
+    }, 100);
 
     // Selection auto-copies to CLIPBOARD
     terminal.onSelectionChange(() => {
