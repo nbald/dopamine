@@ -70,7 +70,11 @@
 </script>
 
 
-<div class="bottom-bar">
+<div class="bottom-bar" onpointerdown={(e) => {
+  // Prevent all buttons from stealing focus (closing keyboard), except the keyboard toggle
+  if ((e.target as HTMLElement).closest('.kb-toggle')) return;
+  e.preventDefault();
+}}>
   <!-- Row 1 -->
   <button class="key-btn" style="position:absolute;left:4px;top:4px;width:38px"   onclick={() => sendEscape('\x1b')}>Esc</button>
   <button class="key-btn mod" style="position:absolute;left:46px;top:4px;width:38px"  class:active={ctrlActive} onclick={() => ctrlActive = !ctrlActive}>Ctrl</button>
@@ -84,7 +88,7 @@
   <button class="key-btn" style="position:absolute;right:4px;top:4px;width:40px"    onclick={() => sendEscape('\x1b[5~')}>PgUp</button>
 
   <!-- Row 2 -->
-  <button class="key-btn" style="position:absolute;left:4px;bottom:4px;width:34px"  onclick={toggleKeyboard}>&#x2328;</button>
+  <button class="key-btn kb-toggle" style="position:absolute;left:4px;bottom:4px;width:34px"  onclick={toggleKeyboard}>&#x2328;</button>
   <button class="key-btn" class:active={selectMode} style="position:absolute;left:42px;bottom:4px;width:34px" onclick={toggleSelect}>Sel</button>
   <button class="key-btn" style="position:absolute;left:80px;bottom:4px;width:44px" onclick={pasteClip}>Paste</button>
 

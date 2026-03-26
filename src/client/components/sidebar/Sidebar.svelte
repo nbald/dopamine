@@ -39,9 +39,10 @@
         class="brand-logout"
         class:closing={logoutClosing}
         title="Hold 3s to logout"
-        onmousedown={startLogout}
-        onmouseup={cancelLogout}
-        onmouseleave={cancelLogout}
+        onpointerdown={startLogout}
+        onpointerup={cancelLogout}
+        onpointercancel={cancelLogout}
+        onpointerleave={cancelLogout}
       ><span>&#x23FB;</span></button>
       <span class="brand-name">Dopamine</span>
     </div>

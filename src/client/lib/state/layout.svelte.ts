@@ -5,6 +5,8 @@ import {
 } from '../utils/split-tree.js';
 import { api } from '../api.js';
 
+const LS_WORKSPACE = 'dopamine:activeWorkspaceId';
+
 class LayoutState {
   /** All workspace trees, keyed by workspace ID */
   trees = $state<Map<number, SplitNode>>(new Map());
@@ -12,6 +14,14 @@ class LayoutState {
   focusedLeafId = $state<string | null>(null);
   maximizedLeafId = $state<string | null>(null);
   private savedTree: SplitNode | null = null;
+
+  getSavedWorkspaceId(): number | null {
+    try {
+      const raw = localStorage.getItem(LS_WORKSPACE);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return null;
+  }
 
   /** The active tree (derived). */
   get tree(): SplitNode | null {
@@ -51,6 +61,7 @@ class LayoutState {
   /** Switch to a workspace. */
   switchWorkspace(workspaceId: number) {
     this.activeWorkspaceId = workspaceId;
+    try { localStorage.setItem(LS_WORKSPACE, JSON.stringify(workspaceId)); } catch {}
     this.maximizedLeafId = null;
     this.savedTree = null;
     const tree = this.trees.get(workspaceId);

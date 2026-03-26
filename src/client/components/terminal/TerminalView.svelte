@@ -1,5 +1,10 @@
+<script module lang="ts">
+  // Persists across component mount/unmount — each terminal keeps its floating input state
+  const floatingInputStore = new Map<number, { open: boolean; text: string }>();
+</script>
+
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { Terminal } from '@xterm/xterm';
   import { FitAddon } from '@xterm/addon-fit';
   import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -8,9 +13,13 @@
   import { appState } from '../../lib/state/app.svelte.js';
   import { layoutState } from '../../lib/state/layout.svelte.js';
   import { toastState } from '../../lib/state/toast.svelte.js';
+  import { uiState } from '../../lib/state/ui.svelte.js';
   import '@xterm/xterm/css/xterm.css';
 
   let { terminalId }: { terminalId: number } = $props();
+
+  // Persistent per-terminal floating input state (survives component destroy/recreate)
+  const _stored = floatingInputStore.get(terminalId);
 
   let containerEl: HTMLDivElement;
   let terminal: Terminal;
@@ -25,6 +34,15 @@
   let isDead = $state(false);
   let exitCode = $state<number | null>(null);
   let showDropOverlay = $state(false);
+  let isScrolledUp = $state(false);
+  let showFloatingInput = $state(_stored?.open ?? false);
+  let floatingInputText = $state(_stored?.text ?? '');
+  let floatingInputEl: HTMLTextAreaElement | undefined = $state();
+
+  // Sync floating input state back to persistent store
+  $effect(() => {
+    floatingInputStore.set(terminalId, { open: showFloatingInput, text: floatingInputText });
+  });
 
   onMount(() => {
     terminal = new Terminal({
@@ -74,6 +92,20 @@
 
     terminal.open(containerEl);
 
+    // Mobile: fix backspace by intercepting beforeinput on xterm's hidden textarea
+    const xtermTa = containerEl.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+    if (xtermTa) {
+      xtermTa.addEventListener('beforeinput', (e: InputEvent) => {
+        if (e.inputType === 'deleteContentBackward') {
+          e.preventDefault();
+          wsManager.send({ type: 'terminal:input', terminalId, data: '\x7f' });
+        } else if (e.inputType === 'deleteContentForward') {
+          e.preventDefault();
+          wsManager.send({ type: 'terminal:input', terminalId, data: '\x1b[3~' });
+        }
+      });
+    }
+
     function doFit() {
       try { fitAddon.fit(); } catch {}
     }
@@ -97,10 +129,9 @@
       }
     });
 
-    // Terminal input → WebSocket + clear activity + resume auto-scroll
+    // Terminal input → WebSocket + clear activity
     terminal.onData((data) => {
       wsManager.send({ type: 'terminal:input', terminalId, data });
-      autoScroll = true;
       for (const p of appState.projects) {
         const t = p.terminals.find(t => t.id === terminalId);
         if (t && t.hasActivity) { t.hasActivity = false; break; }
@@ -133,24 +164,28 @@
       setTimeout(() => containerEl.classList.remove('bell'), 200);
     });
 
-    // Scroll: always auto-scroll unless user is touching the screen.
-    // Touch down = pause. Touch up = check if at bottom, resume if yes.
-    // User typing = always resume.
-    let autoScroll = true;
+    // Track scroll position to show/hide scroll-to-bottom button
+    function updateScrollState() {
+      const buf = terminal.buffer.active;
+      isScrolledUp = buf.viewportY < buf.baseY;
+    }
+    containerEl.addEventListener('wheel', () => requestAnimationFrame(updateScrollState), { passive: true });
+    containerEl.addEventListener('touchend', () => requestAnimationFrame(updateScrollState), { passive: true });
+    terminal.onScroll(updateScrollState);
 
-    containerEl.addEventListener('wheel', () => { autoScroll = false; }, { passive: true });
-    containerEl.addEventListener('touchstart', () => { autoScroll = false; }, { passive: true });
-    containerEl.addEventListener('touchend', () => {
-      requestAnimationFrame(() => {
-        const buf = terminal.buffer.active;
-        autoScroll = buf.viewportY >= buf.baseY;
-      });
-    }, { passive: true });
-
+    // Terminal output: preserve scroll position if user has scrolled up.
+    // Check xterm's actual buffer state — no external flags that can desync.
     cleanups.push(wsManager.on('terminal:output', (msg) => {
       if (msg.terminalId !== terminalId) return;
+      const buf = terminal.buffer.active;
+      const wasScrolledUp = buf.viewportY < buf.baseY;
+      const savedY = buf.viewportY;
       terminal.write(msg.data);
-      if (autoScroll) terminal.scrollToBottom();
+      // Only restore if user was scrolled up AND xterm moved the viewport
+      if (wasScrolledUp && terminal.buffer.active.viewportY !== savedY) {
+        terminal.scrollToLine(savedY);
+      }
+      updateScrollState();
     }));
 
     cleanups.push(wsManager.on('terminal:buffered', (msg) => {
@@ -266,13 +301,13 @@
     wasConnected = connected;
   });
 
-  // Refit + scroll to bottom when workspace switches or pane becomes active
+  // Refit when workspace switches or pane becomes active (no focus/scroll — let user clicks handle that)
   $effect(() => {
     const _wsId = layoutState.activeWorkspaceId;
     const _focus = layoutState.focusedLeafId;
     if (!terminal || !fitAddon) return;
     const t1 = setTimeout(() => { try { fitAddon.fit(); } catch {} }, 50);
-    const t2 = setTimeout(() => { try { fitAddon.fit(); } catch {} terminal.scrollToBottom(); terminal.focus(); }, 500);
+    const t2 = setTimeout(() => { try { fitAddon.fit(); } catch {} }, 500);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   });
 
@@ -298,6 +333,48 @@
       // Re-attach
       wsManager.send({ type: 'terminal:attach', terminalId });
     } catch {}
+  }
+
+  function sendTermKey(data: string) {
+    wsManager.send({ type: 'terminal:input', terminalId, data });
+  }
+
+  function sendFloatingInput() {
+    const trimmed = floatingInputText.trimEnd();
+    if (!trimmed) return;
+    const data = trimmed.replace(/\n/g, '\r') + '\r';
+    wsManager.send({ type: 'terminal:input', terminalId, data });
+    floatingInputText = '';
+    floatingInputEl?.focus();
+    setTimeout(() => terminal?.scrollToBottom(), 50);
+  }
+
+  function clearFloatingInput() {
+    floatingInputText = '';
+    floatingInputEl?.focus();
+  }
+
+  function restoreScroll(distFromBottom: number) {
+    try { fitAddon.fit(); } catch {}
+    const newBase = terminal.buffer.active.baseY;
+    terminal.scrollToLine(Math.max(0, newBase - distFromBottom));
+  }
+
+  function toggleFloatingInput() {
+    // Save distance from bottom BEFORE toggle
+    const buf = terminal?.buffer.active;
+    const distFromBottom = buf ? buf.baseY - buf.viewportY : 0;
+    showFloatingInput = !showFloatingInput;
+    if (showFloatingInput) {
+      tick().then(() => floatingInputEl?.focus());
+    } else {
+      terminal?.focus();
+    }
+    // Restore scroll after refit
+    tick().then(() => {
+      restoreScroll(distFromBottom);
+      setTimeout(() => restoreScroll(distFromBottom), 100);
+    });
   }
 
   onDestroy(() => {
@@ -342,6 +419,67 @@
       <span>Drop files to upload</span>
     </div>
   {/if}
+
+  {#if !showFloatingInput}
+    <div class="bottom-btns">
+      {#if isScrolledUp}
+        <button class="scroll-bottom-btn" title="Scroll to bottom" onpointerdown={(e) => e.preventDefault()} onclick={() => terminal?.scrollToBottom()}>&#x2193;</button>
+      {/if}
+      <button class="side-btn compose-btn" title="Compose input" onclick={toggleFloatingInput}>&#x270E;</button>
+    </div>
+  {/if}
+
+  {#if showFloatingInput}
+    {#if isScrolledUp}
+      <button class="scroll-bottom-btn floating-scroll" title="Scroll to bottom" onpointerdown={(e) => e.preventDefault()} onclick={() => terminal?.scrollToBottom()}>&#x2193;</button>
+    {/if}
+    <div class="floating-input" class:floating-mobile={uiState.isMobile}>
+      <textarea
+        bind:this={floatingInputEl}
+        bind:value={floatingInputText}
+        class="floating-textarea"
+        placeholder="Type here, send when ready..."
+        rows={uiState.isMobile ? 3 : 6}
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        onkeydown={(e) => {
+          if (e.key === 'Enter' && e.shiftKey) {
+            e.preventDefault();
+            sendFloatingInput();
+          }
+          if (e.key === 'Escape') {
+            toggleFloatingInput();
+          }
+        }}
+      ></textarea>
+      {#if uiState.isMobile}
+        <div class="compose-bar" onpointerdown={(e) => { if (!(e.target as HTMLElement).closest('.kb-toggle')) e.preventDefault(); }}>
+          <div class="compose-bar-side">
+            <button class="bar-btn" onclick={() => sendTermKey('\x1b')}>Esc</button>
+            <button class="bar-btn" onclick={() => sendTermKey('\x1b[Z')}>&#x21E7;Tab</button>
+            <span class="bar-spacer"></span>
+            <button class="bar-btn" onclick={() => sendTermKey('\x1b[A')}>&#x25B2;</button>
+            <button class="bar-btn" onclick={() => sendTermKey('\x1b[B')}>&#x25BC;</button>
+            <span class="bar-spacer"></span>
+            <button class="bar-btn" onclick={() => sendTermKey('\r')}>&#x23CE;</button>
+          </div>
+          <div class="compose-bar-side">
+            <button class="bar-btn" onclick={() => sendTermKey('\x7f')}>&#x232B;</button>
+            <button class="bar-btn muted-btn" onclick={toggleFloatingInput}>&#x25BE;</button>
+            <button class="bar-btn send-btn" onclick={sendFloatingInput}>&#x27A4;</button>
+          </div>
+        </div>
+      {:else}
+        <div class="compose-btns">
+          <button class="side-btn send-btn" title="Send (Shift+Enter)" onclick={sendFloatingInput}>&#x21B5;</button>
+          <button class="side-btn muted-btn" title="Clear" onclick={clearFloatingInput}>&#x232B;</button>
+          <button class="side-btn muted-btn" title="Hide" onclick={toggleFloatingInput}>&#x25BE;</button>
+        </div>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -349,10 +487,13 @@
     width: 100%;
     height: 100%;
     position: relative;
+    display: flex;
+    flex-direction: column;
   }
   .terminal-container {
     width: 100%;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     background: #282828;
   }
   .terminal-container :global(.xterm) {
@@ -437,6 +578,195 @@
     color: var(--text-primary);
     border-color: var(--accent);
   }
+
+  /* Side buttons (toggle compose + mobile scroll) */
+  .side-btns {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    padding: 8px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 12;
+    touch-action: none;
+    pointer-events: none;
+  }
+  .side-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(40, 40, 40, 0.5);
+    color: var(--text-secondary);
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    opacity: 0.4;
+    pointer-events: auto;
+  }
+  .side-btn:active {
+    opacity: 0.9;
+    background: rgba(40, 40, 40, 0.7);
+    color: var(--text-primary);
+  }
+  .side-btn.compose-btn {
+    background: var(--accent);
+    color: var(--bg-base);
+    opacity: 0.5;
+  }
+  .side-btn.compose-btn:active {
+    opacity: 1;
+  }
+  .side-btn.send-btn {
+    background: var(--accent);
+    color: var(--bg-base);
+    opacity: 0.9;
+  }
+  .side-btn.send-btn:active {
+    background: var(--accent-bright);
+    opacity: 1;
+  }
+  .side-btn.muted-btn {
+    background: var(--bg-active);
+    color: var(--text-secondary);
+    opacity: 0.8;
+  }
+  .side-btn.muted-btn:active {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    opacity: 1;
+  }
+
+  /* Scroll to bottom — ghost button */
+  .scroll-bottom-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    opacity: 0.4;
+  }
+  .scroll-bottom-btn:active {
+    opacity: 0.9;
+    color: var(--text-primary);
+  }
+
+  /* When textarea is open: in flow above the floating input, right-aligned */
+  .floating-scroll {
+    align-self: flex-end;
+    flex-shrink: 0;
+    margin-right: 6px;
+    margin-bottom: 8px;
+  }
+
+  /* When textarea is closed: stacked with compose toggle */
+  .bottom-btns {
+    position: absolute;
+    right: 6px;
+    bottom: 8px;
+    z-index: 12;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Floating input textarea */
+  .floating-input {
+    flex-shrink: 0;
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border-default);
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+  }
+  .compose-btns {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .floating-input.floating-mobile {
+    flex-direction: column;
+  }
+  .floating-mobile .floating-textarea {
+    width: 100%;
+  }
+
+  /* Mobile: button bar below textarea */
+  .compose-bar {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .compose-bar-side {
+    display: flex;
+    gap: 4px;
+  }
+  .compose-bar-side:last-child {
+    gap: 14px;
+  }
+  .bar-btn {
+    height: 36px;
+    min-width: 36px;
+    padding: 0 8px;
+    border-radius: 6px;
+    border: none;
+    background: var(--bg-active);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .bar-spacer {
+    width: 8px;
+  }
+  .bar-btn:active {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .bar-btn.send-btn {
+    background: var(--accent);
+    color: var(--bg-base);
+  }
+  .bar-btn.send-btn:active {
+    background: var(--accent-bright);
+  }
+  .bar-btn.muted-btn {
+    opacity: 0.7;
+  }
+  .floating-textarea {
+    flex: 1;
+    min-width: 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 8px 10px;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 16px;
+    line-height: 1.4;
+    resize: none;
+    outline: none;
+  }
+  .floating-textarea:focus { border-color: var(--accent); }
+  .floating-textarea::placeholder { color: var(--text-tertiary); }
 
   /* Drop overlay */
   .drop-overlay {

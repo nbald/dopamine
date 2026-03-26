@@ -42,11 +42,39 @@ export type PaneContent =
   | { type: 'iframe'; id: number }
   | null;
 
+const LS_ACTIVE_PANE = 'dopamine:activePane';
+const LS_EXPANDED = 'dopamine:expandedProjects';
+
 class AppState {
   projects = $state<Project[]>([]);
   activePane = $state<PaneContent>(null);
   hostname = $state('');
   onPaneRemoved: ((type: string, id: number) => void) | null = null;
+
+  saveView() {
+    try {
+      localStorage.setItem(LS_ACTIVE_PANE, JSON.stringify(this.activePane));
+      const expanded: Record<number, boolean> = {};
+      for (const p of this.projects) expanded[p.id] = !!p.expanded;
+      localStorage.setItem(LS_EXPANDED, JSON.stringify(expanded));
+    } catch {}
+  }
+
+  private restoreExpanded() {
+    try {
+      const raw = localStorage.getItem(LS_EXPANDED);
+      if (raw) return JSON.parse(raw) as Record<number, boolean>;
+    } catch {}
+    return null;
+  }
+
+  private restoreActivePane(): PaneContent {
+    try {
+      const raw = localStorage.getItem(LS_ACTIVE_PANE);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return null;
+  }
 
   async load() {
     const projects = await api.get<any[]>('/projects');
@@ -61,7 +89,8 @@ class AppState {
       full.push({ ...p, expanded: true, terminals, notes, iframes });
     }
 
-    // Preserve client-side state from previous load
+    // Restore expanded states from localStorage or previous load
+    const savedExpanded = this.restoreExpanded();
     for (const p of full) {
       const prev = this.projects.find(pp => pp.id === p.id);
       if (prev) {
@@ -74,16 +103,32 @@ class AppState {
             t.hasActivity = prevT.hasActivity;
           }
         }
+      } else if (savedExpanded && p.id in savedExpanded) {
+        p.expanded = savedExpanded[p.id];
       }
     }
 
     this.projects = full;
 
-    // Auto-select first terminal if nothing active
-    if (!this.activePane && full.length > 0) {
-      const first = full[0];
-      if (first.terminals.length > 0) {
-        this.activePane = { type: 'terminal', id: first.terminals[0].id };
+    // Restore active pane from localStorage, or auto-select first terminal
+    if (!this.activePane) {
+      const saved = this.restoreActivePane();
+      if (saved) {
+        // Verify the saved pane still exists
+        const exists = full.some(p =>
+          (saved.type === 'terminal' && p.terminals.some(t => t.id === saved.id)) ||
+          (saved.type === 'note' && p.notes.some(n => n.id === saved.id)) ||
+          (saved.type === 'iframe' && p.iframes.some(i => i.id === saved.id))
+        );
+        if (exists) {
+          this.activePane = saved;
+        }
+      }
+      if (!this.activePane && full.length > 0) {
+        const first = full[0];
+        if (first.terminals.length > 0) {
+          this.activePane = { type: 'terminal', id: first.terminals[0].id };
+        }
       }
     }
   }
@@ -108,11 +153,31 @@ class AppState {
   }
 
   async createTerminal(projectId: number, name?: string) {
-    // Get CWD from active terminal if possible
+    // Get CWD from the most relevant existing terminal:
+    // 1. Active terminal, 2. Last terminal in same project, 3. Last terminal in any project
     let cwd: string | undefined;
+    let sourceTerminalId: number | undefined;
+
     if (this.activePane?.type === 'terminal') {
+      sourceTerminalId = this.activePane.id;
+    }
+    if (!sourceTerminalId) {
+      const project = this.projects.find(p => p.id === projectId);
+      if (project && project.terminals.length > 0) {
+        sourceTerminalId = project.terminals[project.terminals.length - 1].id;
+      }
+    }
+    if (!sourceTerminalId) {
+      for (const p of this.projects) {
+        if (p.terminals.length > 0) {
+          sourceTerminalId = p.terminals[p.terminals.length - 1].id;
+          break;
+        }
+      }
+    }
+    if (sourceTerminalId) {
       try {
-        const res = await api.get<{ cwd: string | null }>(`/terminals/${this.activePane.id}/cwd`);
+        const res = await api.get<{ cwd: string | null }>(`/terminals/${sourceTerminalId}/cwd`);
         if (res.cwd) cwd = res.cwd;
       } catch {}
     }

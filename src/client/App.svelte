@@ -223,6 +223,15 @@
     };
   });
 
+  // Persist active view to localStorage
+  $effect(() => {
+    if (state !== 'app') return;
+    // Track activePane and expanded states
+    const _pane = appState.activePane;
+    const _projects = appState.projects.map(p => p.expanded);
+    appState.saveView();
+  });
+
   // When sidebar changes activePane, assign to focused leaf (desktop) or just track (mobile)
   let lastPaneKey = $state('');
   $effect(() => {
@@ -282,7 +291,6 @@
           <div class="center empty">Open the menu to select a terminal</div>
         {/if}
       </div>
-      <BottomBar />
       <MobileDrawer />
     </div>
   {:else}

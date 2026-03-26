@@ -31,9 +31,10 @@
       layoutState.loadWorkspace(ws.id, ws.layout);
     }
 
-    // Activate first workspace
-    const first = workspaces[0];
-    layoutState.switchWorkspace(first.id);
+    // Activate saved workspace, or fall back to first
+    const savedWsId = layoutState.getSavedWorkspaceId();
+    const target = (savedWsId && workspaces.find(w => w.id === savedWsId)) || workspaces[0];
+    layoutState.switchWorkspace(target.id);
 
     // If active tree is empty and there's a terminal, assign it
     if (layoutState.tree?.type === 'leaf' && layoutState.tree.contentType === 'empty') {

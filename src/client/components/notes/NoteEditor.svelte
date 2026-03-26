@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { api } from '../../lib/api.js';
+  import { appState } from '../../lib/state/app.svelte.js';
 
   let { noteId }: { noteId: number } = $props();
 
@@ -8,9 +9,18 @@
   let name = $state('');
   let loaded = $state(false);
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  let textareaEl: HTMLTextAreaElement | undefined = $state();
 
   onMount(() => {
     loadNote();
+  });
+
+  // Auto-focus textarea when this note becomes the active pane
+  $effect(() => {
+    const pane = appState.activePane;
+    if (pane?.type === 'note' && pane.id === noteId && textareaEl) {
+      tick().then(() => textareaEl?.focus());
+    }
   });
 
   async function loadNote() {
@@ -18,6 +28,8 @@
     content = note.content;
     name = note.name;
     loaded = true;
+    await tick();
+    textareaEl?.focus();
   }
 
   function onInput() {
@@ -26,13 +38,26 @@
       api.put(`/notes/${noteId}`, { content }).catch(() => {});
     }, 500);
   }
+
+  function onSelect() {
+    if (!textareaEl) return;
+    const start = textareaEl.selectionStart;
+    const end = textareaEl.selectionEnd;
+    if (start !== end) {
+      const text = content.substring(start, end);
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
+  }
 </script>
 
 {#if loaded}
   <textarea
     class="note-editor"
+    bind:this={textareaEl}
     bind:value={content}
     oninput={onInput}
+    onselect={onSelect}
+    ontouchend={onSelect}
     spellcheck="false"
     placeholder="Start typing..."
   ></textarea>

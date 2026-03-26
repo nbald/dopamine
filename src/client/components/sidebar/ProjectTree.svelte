@@ -2,6 +2,7 @@
   import { appState, type Project } from '../../lib/state/app.svelte.js';
   import { inlineEdit } from '../../lib/actions/inline-edit.js';
   import { dragState } from '../../lib/state/drag.svelte.js';
+  import { uiState } from '../../lib/state/ui.svelte.js';
 
   let { project }: { project: Project } = $props();
 
@@ -91,8 +92,8 @@
 <div
   class="project-group"
   class:drag-over={isDragOver}
-  onmouseenter={() => showActions = true}
-  onmouseleave={() => { showActions = false; cancelDelete(); }}
+  onpointerenter={() => showActions = true}
+  onpointerleave={() => { showActions = false; cancelDelete(); }}
   ondragover={onProjectDragOver}
   ondragleave={onProjectDragLeave}
   ondrop={onProjectDrop}
@@ -106,7 +107,7 @@
   >
     <span class="expand-icon">{project.expanded ? '▼' : '▶'}</span>
     <span class="project-name" use:inlineEdit={{ value: project.name, onSave: (v) => appState.renameProject(project.id, v) }}>{project.name}</span>
-    <div class="project-actions" class:visible={showActions} onclick={(e) => e.stopPropagation()}>
+    <div class="project-actions" class:visible={showActions || uiState.isMobile} onclick={(e) => e.stopPropagation()}>
       <button class="act-btn" title="New terminal" onclick={() => appState.createTerminal(project.id)}>&gt;_</button>
       <button class="act-btn" title="New note" onclick={() => appState.createNote(project.id)}>&#9776;</button>
       <button class="act-btn" title="New iframe" onclick={() => appState.createIframe(project.id)}>&lt;/&gt;</button>
@@ -114,9 +115,10 @@
         class="act-btn del"
         class:closing={deletingId === `p${project.id}`}
         title="Hold 3s to delete project"
-        onmousedown={() => startDelete(`p${project.id}`, () => appState.deleteProject(project.id))}
-        onmouseup={cancelDelete}
-        onmouseleave={cancelDelete}
+        onpointerdown={() => startDelete(`p${project.id}`, () => appState.deleteProject(project.id))}
+        onpointerup={cancelDelete}
+        onpointercancel={cancelDelete}
+        onpointerleave={cancelDelete}
       ><span>&#xd7;</span></button>
     </div>
   </div>
@@ -141,12 +143,14 @@
           {/if}
           <button
             class="item-del"
+            class:mobile-visible={uiState.isMobile}
             class:closing={deletingId === `t${t.id}`}
             title="Hold 3s to delete"
             onclick={(e) => e.stopPropagation()}
-            onmousedown={(e) => { e.stopPropagation(); startDelete(`t${t.id}`, () => appState.deleteTerminal(t.id)); }}
-            onmouseup={cancelDelete}
-            onmouseleave={cancelDelete}
+            onpointerdown={(e) => { e.stopPropagation(); startDelete(`t${t.id}`, () => appState.deleteTerminal(t.id)); }}
+            onpointerup={cancelDelete}
+            onpointercancel={cancelDelete}
+            onpointerleave={cancelDelete}
           ><span>&#xd7;</span></button>
         </div>
       {/each}
@@ -164,12 +168,14 @@
           <span class="label" use:inlineEdit={{ value: n.name, onSave: (v) => appState.renameNote(n.id, v) }}>{n.name}</span>
           <button
             class="item-del"
+            class:mobile-visible={uiState.isMobile}
             class:closing={deletingId === `n${n.id}`}
             title="Hold 3s to delete"
             onclick={(e) => e.stopPropagation()}
-            onmousedown={(e) => { e.stopPropagation(); startDelete(`n${n.id}`, () => appState.deleteNote(n.id)); }}
-            onmouseup={cancelDelete}
-            onmouseleave={cancelDelete}
+            onpointerdown={(e) => { e.stopPropagation(); startDelete(`n${n.id}`, () => appState.deleteNote(n.id)); }}
+            onpointerup={cancelDelete}
+            onpointercancel={cancelDelete}
+            onpointerleave={cancelDelete}
           ><span>&#xd7;</span></button>
         </div>
       {/each}
@@ -187,12 +193,14 @@
           <span class="label" use:inlineEdit={{ value: i.name, onSave: (v) => appState.renameIframe(i.id, v) }}>{i.name}</span>
           <button
             class="item-del"
+            class:mobile-visible={uiState.isMobile}
             class:closing={deletingId === `i${i.id}`}
             title="Hold 3s to delete"
             onclick={(e) => e.stopPropagation()}
-            onmousedown={(e) => { e.stopPropagation(); startDelete(`i${i.id}`, () => appState.deleteIframe(i.id)); }}
-            onmouseup={cancelDelete}
-            onmouseleave={cancelDelete}
+            onpointerdown={(e) => { e.stopPropagation(); startDelete(`i${i.id}`, () => appState.deleteIframe(i.id)); }}
+            onpointerup={cancelDelete}
+            onpointercancel={cancelDelete}
+            onpointerleave={cancelDelete}
           ><span>&#xd7;</span></button>
         </div>
       {/each}
@@ -338,6 +346,7 @@
     margin-left: auto;
   }
   .tree-item:hover .item-del { display: flex; }
+  .item-del.mobile-visible { display: flex; }
 
   .stopping-dot {
     width: 8px;
