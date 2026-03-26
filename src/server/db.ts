@@ -1,8 +1,6 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import { config } from './config.js';
-import { assignProjectCategory, assignPanelEmoji, generatePanelName } from './utils/emoji.js';
-
 let db: Database.Database;
 
 const SCHEMA = `
@@ -99,35 +97,6 @@ function migrate(db: Database.Database) {
     try { db.exec(sql); } catch {}
   }
 
-  // Backfill existing projects with a category
-  const projects = db.prepare('SELECT id FROM projects WHERE emoji_category IS NULL').all() as { id: number }[];
-  for (const p of projects) {
-    const category = assignProjectCategory(db);
-    db.prepare('UPDATE projects SET emoji_category = ? WHERE id = ?').run(category, p.id);
-  }
-
-  // Assign emojis to panels that don't have one yet
-  const panelTables = ['terminals', 'notes', 'iframes'];
-  for (const table of panelTables) {
-    const items = db.prepare(`SELECT id, project_id FROM ${table} WHERE emoji IS NULL`).all() as { id: number; project_id: number }[];
-    for (const item of items) {
-      const emoji = assignPanelEmoji(db, item.project_id);
-      db.prepare(`UPDATE ${table} SET emoji = ? WHERE id = ?`).run(emoji, item.id);
-    }
-  }
-
-  // Regenerate all panel names from their emoji
-  for (const table of panelTables) {
-    const items = db.prepare(`SELECT id, emoji FROM ${table} WHERE emoji IS NOT NULL`).all() as { id: number; emoji: string }[];
-    for (const item of items) {
-      const name = generatePanelName(item.emoji);
-      if (table === 'terminals') {
-        db.prepare('UPDATE terminals SET name = ?, title_override = NULL WHERE id = ?').run(name, item.id);
-      } else {
-        db.prepare(`UPDATE ${table} SET name = ? WHERE id = ?`).run(name, item.id);
-      }
-    }
-  }
 }
 
 export function getDb(): Database.Database {
