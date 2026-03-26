@@ -471,9 +471,19 @@
         autocapitalize="off"
         spellcheck="false"
         onkeydown={(e) => {
+          if (e.key === 'Tab' && e.shiftKey) {
+            e.preventDefault();
+            sendTermKey('\x1b[Z');
+            return;
+          }
           if (e.key === 'Enter' && e.shiftKey) {
             e.preventDefault();
-            sendFloatingInput();
+            if (!floatingInputText.trim()) {
+              sendTermKey('\r');
+            } else {
+              sendFloatingInput();
+            }
+            return;
           }
           if (e.key === 'Escape') {
             toggleFloatingInput();
