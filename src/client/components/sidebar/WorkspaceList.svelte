@@ -147,7 +147,7 @@
     class:active={layoutState.activeWorkspaceId === ws.id}
     onclick={() => activate(ws)}
   >
-    <span class="ws-icon">{['🟥','🟢','🟦','🟡','🟪','🟠','🟩','🔵','🟧','🟣','🟨','🔴','⬜','⬛'][i] || '⬜'}</span>
+    <span class="ws-icon">{['🟥','🟢','🟦','🟡','🟪','🟠','🟩','🔵','🟧','🟣','🟨','🔴','⬜','⬛'][i % 14]}</span>
     <span class="ws-name" use:inlineEdit={{ value: ws.name, onSave: async (v) => { await api.put(`/workspaces/${ws.id}`, { name: v }); ws.name = v; } }}>{ws.name}</span>
     {#if workspaces.length > 1}
       <button
