@@ -84,7 +84,6 @@
   let isDead = $state(false);
   let exitCode = $state<number | null>(null);
   let showDropOverlay = $state(false);
-  let isScrolledUp = $state(false);
   let showFloatingInput = $state(_stored?.open ?? true);
   let historyIndex = $state(-1);
   let savedDraft = $state('');
@@ -209,7 +208,6 @@
     terminal.onResize(({ cols, rows }) => {
       sendResize(cols, rows);
       terminal.scrollToBottom();
-      isScrolledUp = false;
     });
 
     // On first focus, claim size
@@ -222,13 +220,6 @@
       containerEl.classList.add('bell');
       setTimeout(() => containerEl.classList.remove('bell'), 200);
     });
-
-    // Track whether user is scrolled up
-    function updateScrollState() {
-      const buf = terminal.buffer.active;
-      isScrolledUp = buf.viewportY < buf.baseY;
-    }
-    terminal.onScroll(updateScrollState);
 
     // Mobile: touch scroll overlay — intercepts swipe gestures, drives terminal.scrollLines()
     if (uiState.isMobile && touchOverlayEl) {
@@ -278,7 +269,7 @@
           if (lines !== 0) {
             terminal.scrollLines(lines);
             touchAccum -= lines * lh;
-            updateScrollState();
+
           }
         }
       }, { passive: false });
@@ -295,7 +286,7 @@
             if (lines !== 0) {
               terminal.scrollLines(lines);
               touchAccum -= lines * lh;
-              updateScrollState();
+  
             }
             if (Math.abs(velocity) > 0.01) {
               momentumRaf = requestAnimationFrame(momentumStep);
@@ -470,7 +461,6 @@
 
   function doScrollToBottom() {
     terminal?.scrollToBottom();
-    isScrolledUp = false;
   }
 
   function sendFloatingInput() {
@@ -546,7 +536,7 @@
     {#if uiState.isMobile}
       <div class="touch-scroll-overlay" bind:this={touchOverlayEl}></div>
     {/if}
-    {#if isScrolledUp && showFloatingInput}
+    {#if showFloatingInput}
       <button class="scroll-bottom-btn floating-scroll" title="Scroll to bottom" onpointerdown={(e) => e.preventDefault()} onclick={doScrollToBottom}>&#x2193;</button>
     {/if}
   </div>
@@ -585,9 +575,7 @@
 
   {#if !showFloatingInput}
     <div class="bottom-btns">
-      {#if isScrolledUp}
-        <button class="scroll-bottom-btn" title="Scroll to bottom" onpointerdown={(e) => e.preventDefault()} onclick={doScrollToBottom}>&#x2193;</button>
-      {/if}
+      <button class="scroll-bottom-btn" title="Scroll to bottom" onpointerdown={(e) => e.preventDefault()} onclick={doScrollToBottom}>&#x2193;</button>
       <button class="side-btn compose-btn" title="Compose input" onclick={toggleFloatingInput}>&#x270E;</button>
     </div>
   {/if}
