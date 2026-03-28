@@ -15,33 +15,37 @@
 
   const floatingInputStore = loadStore();
 
-  let inputHistory: string[] = [];
+  const historyMap = new Map<number, string[]>();
 
-  async function fetchHistory() {
+  async function fetchHistory(projectId: number) {
+    if (historyMap.has(projectId)) return;
     try {
-      const res = await fetch('/api/history', { credentials: 'same-origin' });
-      if (res.ok) inputHistory = await res.json();
+      const res = await fetch(`/api/history?projectId=${projectId}`, { credentials: 'same-origin' });
+      if (res.ok) historyMap.set(projectId, await res.json());
     } catch {}
   }
 
-  async function pushHistory(text: string) {
+  function getHistory(projectId: number): string[] {
+    return historyMap.get(projectId) || [];
+  }
+
+  async function pushHistory(projectId: number, text: string) {
     // Optimistic local update
-    const idx = inputHistory.indexOf(text);
-    if (idx !== -1) inputHistory.splice(idx, 1);
-    inputHistory.push(text);
-    if (inputHistory.length > 20) inputHistory.splice(0, inputHistory.length - 20);
+    let hist = historyMap.get(projectId) || [];
+    const idx = hist.indexOf(text);
+    if (idx !== -1) hist.splice(idx, 1);
+    hist.push(text);
+    if (hist.length > 20) hist.splice(0, hist.length - 20);
+    historyMap.set(projectId, hist);
     try {
       await fetch('/api/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, projectId }),
         credentials: 'same-origin',
       });
     } catch {}
   }
-
-  // Load history once on module init
-  fetchHistory();
 </script>
 
 <script lang="ts">
@@ -58,6 +62,13 @@
   import '@xterm/xterm/css/xterm.css';
 
   let { terminalId }: { terminalId: number } = $props();
+
+  let projectId = $derived.by(() => {
+    for (const p of appState.projects) {
+      if (p.terminals.some(t => t.id === terminalId)) return p.id;
+    }
+    return 0;
+  });
 
   let terminalLabel = $derived.by(() => {
     for (const p of appState.projects) {
@@ -97,6 +108,8 @@
   });
 
   onMount(() => {
+    fetchHistory(projectId);
+
     terminal = new Terminal({
       scrollback: 100000,
       fontSize: 16,
@@ -478,7 +491,7 @@
       historyIndex = -1;
       return;
     }
-    pushHistory(trimmed);
+    pushHistory(projectId, trimmed);
     historyIndex = -1;
     savedDraft = '';
     const data = trimmed.replace(/\n/g, '\r') + '\r';
@@ -489,21 +502,22 @@
   }
 
   function navigateHistory(direction: 'up' | 'down') {
-    if (inputHistory.length === 0) return;
+    const hist = getHistory(projectId);
+    if (hist.length === 0) return;
 
     if (direction === 'up') {
       if (historyIndex === -1) {
         savedDraft = floatingInputText;
-        historyIndex = inputHistory.length - 1;
+        historyIndex = hist.length - 1;
       } else if (historyIndex > 0) {
         historyIndex--;
       }
-      floatingInputText = inputHistory[historyIndex];
+      floatingInputText = hist[historyIndex];
     } else {
       if (historyIndex === -1) return;
-      if (historyIndex < inputHistory.length - 1) {
+      if (historyIndex < hist.length - 1) {
         historyIndex++;
-        floatingInputText = inputHistory[historyIndex];
+        floatingInputText = hist[historyIndex];
       } else {
         historyIndex = -1;
         floatingInputText = savedDraft;

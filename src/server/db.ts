@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS iframes (
 
 CREATE TABLE IF NOT EXISTS input_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL DEFAULT 0,
     text TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -72,6 +73,7 @@ CREATE TABLE IF NOT EXISTS input_history (
 CREATE INDEX IF NOT EXISTS idx_terminals_project ON terminals(project_id);
 CREATE INDEX IF NOT EXISTS idx_notes_project ON notes(project_id);
 CREATE INDEX IF NOT EXISTS idx_iframes_project ON iframes(project_id);
+CREATE INDEX IF NOT EXISTS idx_history_project ON input_history(project_id);
 `;
 
 export function initDb(): Database.Database {
@@ -92,6 +94,7 @@ function migrate(db: Database.Database) {
     'ALTER TABLE terminals ADD COLUMN emoji TEXT',
     'ALTER TABLE notes ADD COLUMN emoji TEXT',
     'ALTER TABLE iframes ADD COLUMN emoji TEXT',
+    'ALTER TABLE input_history ADD COLUMN project_id INTEGER NOT NULL DEFAULT 0',
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}
