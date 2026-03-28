@@ -40,20 +40,8 @@
     return null;
   });
 
-  let closeProgress = $state(false);
-  let closeTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function startClose() {
-    closeProgress = true;
-    closeTimer = setTimeout(() => {
-      layoutState.close(leaf.id);
-      closeProgress = false;
-    }, 3000);
-  }
-
-  function cancelClose() {
-    if (closeTimer) clearTimeout(closeTimer);
-    closeProgress = false;
+  function doClose() {
+    layoutState.close(leaf.id);
   }
 </script>
 
@@ -83,14 +71,7 @@
       <button class="pane-btn" title="Split vertical" onclick={(e) => { e.stopPropagation(); layoutState.setFocus(leaf.id); layoutState.split('h'); }}>&#x2503;</button>
       <button class="pane-btn" title="Split horizontal" onclick={(e) => { e.stopPropagation(); layoutState.setFocus(leaf.id); layoutState.split('v'); }}>&#x2501;</button>
       <button class="pane-btn" title="Fullscreen" onclick={(e) => { e.stopPropagation(); layoutState.toggleMaximize(leaf.id); }}>&#x26F6;</button>
-      <button
-        class="pane-close"
-        class:closing={closeProgress}
-        title="Hold 3s to close"
-        onmousedown={startClose}
-        onmouseup={cancelClose}
-        onmouseleave={cancelClose}
-      ><span>&#xd7;</span></button>
+      <button class="pane-close" title="Close" onclick={doClose}><span>&#xd7;</span></button>
     </div>
   </div>
 
@@ -216,24 +197,7 @@
     overflow: hidden;
     transition: color 0.2s ease;
   }
-  .pane-close::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: var(--red);
-    transform: scaleX(0.15);
-    transform-origin: left;
-    border-radius: 3px;
-    z-index: 0;
-    opacity: 0;
-  }
-  .pane-close.closing::before {
-    transform: scaleX(1);
-    transition: transform 3s linear;
-    opacity: 1;
-  }
-  .pane-close.closing { color: var(--text-bright); }
-  .pane-close span { position: relative; z-index: 1; }
+  .pane-close:hover { background: var(--bg-hover); color: var(--text-primary); }
 
   .pane-body {
     flex: 1;
