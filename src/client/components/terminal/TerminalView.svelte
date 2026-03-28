@@ -593,6 +593,7 @@
         autocorrect="off"
         autocapitalize="off"
         spellcheck="false"
+        oninput={() => { if (historyIndex !== -1) historyIndex = -1; }}
         onkeydown={(e) => {
           if (e.key === 'Tab' && e.shiftKey) {
             e.preventDefault();
