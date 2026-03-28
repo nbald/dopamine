@@ -103,18 +103,19 @@ class LayoutState {
     const tree = this.tree;
     if (!tree) return;
 
-    const targetId = this.focusedLeafId;
-    if (!targetId) {
-      const leaves = flattenLeaves(tree);
-      const empty = leaves.find(l => l.contentType === 'empty');
-      const target = empty || leaves[0];
-      if (target) {
-        this.setTree(assignContent(tree, target.id, contentType, contentId));
-        this.focusedLeafId = target.id;
-      }
+    const leaves = flattenLeaves(tree);
+    const empty = leaves.find(l => l.contentType === 'empty');
+
+    if (empty) {
+      this.setTree(assignContent(tree, empty.id, contentType, contentId));
+      this.focusedLeafId = empty.id;
       return;
     }
-    this.setTree(assignContent(tree, targetId, contentType, contentId));
+
+    const targetId = this.focusedLeafId || leaves[0]?.id;
+    if (targetId) {
+      this.setTree(assignContent(tree, targetId, contentType, contentId));
+    }
   }
 
   resize(branchId: string, ratio: number) {
