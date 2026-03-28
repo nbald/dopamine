@@ -122,6 +122,18 @@ function reindexIds(node: SplitNode): void {
   }
 }
 
+/** Swap the content of two leaves. */
+export function swapLeaves(tree: SplitNode, leafId1: string, leafId2: string): SplitNode {
+  const leaf1 = findLeaf(tree, leafId1);
+  const leaf2 = findLeaf(tree, leafId2);
+  if (!leaf1 || !leaf2) return tree;
+  const { contentType: ct1, contentId: ci1 } = leaf1;
+  const { contentType: ct2, contentId: ci2 } = leaf2;
+  let result = assignContent(tree, leafId1, ct2, ci2);
+  result = assignContent(result, leafId2, ct1, ci1);
+  return result;
+}
+
 /** Replace a leaf with the result of a mapper function. */
 function mapNode(tree: SplitNode, leafId: string, mapper: (leaf: LeafNode) => SplitNode): SplitNode {
   if (tree.type === 'leaf') {

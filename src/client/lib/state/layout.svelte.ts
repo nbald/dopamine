@@ -1,7 +1,7 @@
 import {
   type SplitNode, type ContentType, type LeafNode,
   createLeaf, splitLeaf, removeLeaf, assignContent, setRatio,
-  findLeaf, flattenLeaves, findAdjacentLeaf, serialize, deserialize,
+  findLeaf, flattenLeaves, findAdjacentLeaf, serialize, deserialize, swapLeaves,
 } from '../utils/split-tree.js';
 import { api } from '../api.js';
 
@@ -140,6 +140,12 @@ class LayoutState {
         this.focusedLeafId = leaf.id;
       }
     }
+  }
+
+  swap(leafId1: string, leafId2: string) {
+    const tree = this.tree;
+    if (!tree || leafId1 === leafId2) return;
+    this.setTree(swapLeaves(tree, leafId1, leafId2));
   }
 
   navigate(dir: 'left' | 'right' | 'up' | 'down') {

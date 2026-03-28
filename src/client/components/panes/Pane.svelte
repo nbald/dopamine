@@ -43,6 +43,32 @@
   function doClose() {
     layoutState.close(leaf.id);
   }
+
+  let dragOver = $state(false);
+
+  function onDragStart(e: DragEvent) {
+    e.dataTransfer!.effectAllowed = 'move';
+    e.dataTransfer!.setData('text/plain', leaf.id);
+  }
+
+  function onDragOver(e: DragEvent) {
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = 'move';
+    dragOver = true;
+  }
+
+  function onDragLeave() {
+    dragOver = false;
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    dragOver = false;
+    const sourceId = e.dataTransfer!.getData('text/plain');
+    if (sourceId && sourceId !== leaf.id) {
+      layoutState.swap(sourceId, leaf.id);
+    }
+  }
 </script>
 
 <div
@@ -51,11 +77,15 @@
   class:focus-green={isFocused && borderClass === 'focus-green'}
   class:focus-yellow={isFocused && borderClass === 'focus-yellow'}
   class:focus-blue={isFocused && borderClass === 'focus-blue'}
+  class:drag-over={dragOver}
   onclick={() => { layoutState.setFocus(leaf.id); clearActivity(); }}
   onkeydown={clearActivity}
+  ondragover={onDragOver}
+  ondragleave={onDragLeave}
+  ondrop={onDrop}
   role="group"
 >
-  <div class="pane-header">
+  <div class="pane-header" draggable="true" ondragstart={onDragStart}>
     {#if paneInfo}
       <span class="pane-title">
         <span class="pane-panel">{paneInfo.emoji} {paneInfo.claudePrefix ? paneInfo.claudePrefix + ' ' : ''}{paneInfo.name}</span>
@@ -109,6 +139,7 @@
   .pane.focus-green { border-color: var(--accent); }
   .pane.focus-yellow { border-color: var(--yellow); }
   .pane.focus-blue { border-color: var(--blue); }
+  .pane.drag-over { border-color: var(--accent); border-style: dashed; }
 
   .pane-header {
     height: 32px;
@@ -121,7 +152,9 @@
     flex-shrink: 0;
     font-size: 12px;
     color: var(--text-secondary);
+    cursor: grab;
   }
+  .pane-header:active { cursor: grabbing; }
   .pane.focused .pane-header { color: var(--text-primary); }
 
   .pane-icon {
