@@ -15,6 +15,11 @@
 
   const floatingInputStore = loadStore();
 
+  export function cleanupTerminalStore(terminalId: number) {
+    floatingInputStore.delete(terminalId);
+    saveStore(floatingInputStore);
+  }
+
   const historyMap = new Map<number, string[]>();
 
   async function fetchHistory(projectId: number) {

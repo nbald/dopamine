@@ -75,7 +75,8 @@ server.listen(config.port, config.bind, () => {
 // HTTP → HTTPS redirect on port+1
 const httpApp = express();
 httpApp.all('{*path}', (req, res) => {
-  res.redirect(301, `https://${req.socket.localAddress}:${config.port}${req.url}`);
+  const host = (req.headers.host || '').split(':')[0] || 'localhost';
+  res.redirect(301, `https://${host}:${config.port}${req.url}`);
 });
 const httpServer = http.createServer(httpApp);
 httpServer.listen(config.port + 1, config.bind);

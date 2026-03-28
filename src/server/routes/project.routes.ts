@@ -66,6 +66,7 @@ router.put('/projects/:id', (req, res) => {
 
 router.delete('/projects/:id', (req, res) => {
   const { id } = req.params;
+  getDb().prepare('DELETE FROM input_history WHERE project_id = ?').run(Number(id));
   getDb().prepare('DELETE FROM projects WHERE id = ?').run(Number(id));
   res.status(204).end();
 });

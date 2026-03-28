@@ -12,7 +12,7 @@
   import ToastContainer from './components/common/ToastContainer.svelte';
   import MobileDrawer from './components/mobile/MobileDrawer.svelte';
   import BottomBar from './components/mobile/BottomBar.svelte';
-  import TerminalView from './components/terminal/TerminalView.svelte';
+  import TerminalView, { cleanupTerminalStore } from './components/terminal/TerminalView.svelte';
   import NoteEditor from './components/notes/NoteEditor.svelte';
   import IframeView from './components/iframe/IframeView.svelte';
   import FuzzyFinder from './components/modals/FuzzyFinder.svelte';
@@ -112,6 +112,9 @@
             layoutState.close(leaf.id);
           }
         }
+      }
+      if (type === 'terminal') {
+        cleanupTerminalStore(id);
       }
     };
 

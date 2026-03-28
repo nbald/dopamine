@@ -10,9 +10,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   if (res.status === 204) return undefined as T;
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  return data as T;
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return await res.json() as T;
 }
 
 export const api = {

@@ -17,7 +17,8 @@
 
   function navigate() {
     let target = inputUrl.trim();
-    if (target && !target.startsWith('http://') && !target.startsWith('https://')) {
+    if (!target) { url = ''; return; }
+    if (!/^https?:\/\//i.test(target)) {
       target = 'https://' + target;
     }
     url = target;
