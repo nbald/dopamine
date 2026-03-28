@@ -20,7 +20,9 @@ class PtyManager {
     fs.mkdirSync(config.historyDir, { recursive: true });
     this.useDtach = dtach.isDtachAvailable();
     if (this.useDtach) {
-      console.log('dtach detected — terminals will persist across server restarts');
+      const dtachBin = dtach.getDtachPath()!;
+      const source = dtachBin !== 'dtach' ? 'bundled' : 'system';
+      console.log(`dtach detected (${source}) — terminals will persist across server restarts`);
       this.reattachExisting();
     } else {
       console.log('dtach not found — terminals will not survive server restarts');
@@ -48,7 +50,7 @@ class PtyManager {
     const cols = row?.cols || 80;
     const rows = row?.rows || 24;
 
-    const proc = pty.spawn('dtach', dtach.attachArgs(terminalId), {
+    const proc = pty.spawn(dtach.getDtachPath()!, dtach.attachArgs(terminalId), {
       name: 'xterm-256color',
       cols,
       rows,
@@ -86,7 +88,7 @@ class PtyManager {
 
     if (this.useDtach) {
       // dtach -A creates if not exists, attaches if exists
-      proc = pty.spawn('dtach', dtach.createAndAttachArgs(terminalId, config.shell), {
+      proc = pty.spawn(dtach.getDtachPath()!, dtach.createAndAttachArgs(terminalId, config.shell), {
         name: 'xterm-256color',
         cols,
         rows,

@@ -3,19 +3,38 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
 
-let dtachAvailable: boolean | null = null;
+let dtachPath: string | null | undefined = undefined;
 let socketDir: string | null = null;
 
-export function isDtachAvailable(): boolean {
-  if (dtachAvailable !== null) return dtachAvailable;
+/** Resolve the dtach binary: bundled first, then system PATH */
+export function getDtachPath(): string | null {
+  if (dtachPath !== undefined) return dtachPath;
+
+  // Try bundled binary first
+  const bundled = path.resolve(import.meta.dirname, '../../../vendor/dtach/dtach');
+  if (fs.existsSync(bundled)) {
+    dtachPath = bundled;
+    return dtachPath;
+  }
+
+  // Fall back to system PATH
   try {
     execFileSync('dtach', ['--help'], { stdio: 'pipe' });
-    dtachAvailable = true;
+    dtachPath = 'dtach';
+    return dtachPath;
   } catch (e: any) {
-    // dtach --help exits with non-zero but prints usage
-    dtachAvailable = e.status !== 127;
+    if (e.status !== 127) {
+      dtachPath = 'dtach';
+      return dtachPath;
+    }
   }
-  return dtachAvailable;
+
+  dtachPath = null;
+  return null;
+}
+
+export function isDtachAvailable(): boolean {
+  return getDtachPath() !== null;
 }
 
 function getSocketDir(): string {

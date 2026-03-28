@@ -7,6 +7,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "postinstall": "node scripts/build-dtach.mjs",
     "dev": "npx tsx watch src/server/index.ts & ./node_modules/.bin/vite; wait",
     "dev:server": "npx tsx watch src/server/index.ts",
     "dev:client": "./node_modules/.bin/vite",
