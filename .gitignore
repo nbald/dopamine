@@ -7,6 +7,7 @@ data/
 .env
 nohup.out
 vendor/dtach/dtach
+vendor/dtach/*.o
 vendor/dtach/config.h
 vendor/dtach/config.log
 vendor/dtach/config.status
