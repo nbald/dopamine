@@ -165,36 +165,7 @@ class AppState {
   }
 
   async createTerminal(projectId: number, name?: string) {
-    // Get CWD from the most relevant existing terminal:
-    // 1. Active terminal, 2. Last terminal in same project, 3. Last terminal in any project
-    let cwd: string | undefined;
-    let sourceTerminalId: number | undefined;
-
-    if (this.activePane?.type === 'terminal') {
-      sourceTerminalId = this.activePane.id;
-    }
-    if (!sourceTerminalId) {
-      const project = this.projects.find(p => p.id === projectId);
-      if (project && project.terminals.length > 0) {
-        sourceTerminalId = project.terminals[project.terminals.length - 1].id;
-      }
-    }
-    if (!sourceTerminalId) {
-      for (const p of this.projects) {
-        if (p.terminals.length > 0) {
-          sourceTerminalId = p.terminals[p.terminals.length - 1].id;
-          break;
-        }
-      }
-    }
-    if (sourceTerminalId) {
-      try {
-        const res = await api.get<{ cwd: string | null }>(`/terminals/${sourceTerminalId}/cwd`);
-        if (res.cwd) cwd = res.cwd;
-      } catch {}
-    }
-
-    const t = await api.post<any>(`/projects/${projectId}/terminals`, { name: name || undefined, cwd });
+    const t = await api.post<any>(`/projects/${projectId}/terminals`, { name: name || undefined });
     const project = this.projects.find(p => p.id === projectId);
     if (project) project.terminals = [...project.terminals, t];
     this.activePane = { type: 'terminal', id: t.id };
