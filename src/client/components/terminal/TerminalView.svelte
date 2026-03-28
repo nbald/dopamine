@@ -160,6 +160,7 @@
 
     function doFit() {
       try { fitAddon.fit(); } catch {}
+      terminal.scrollToBottom();
     }
 
     // Fit after load
@@ -311,6 +312,12 @@
     cleanups.push(wsManager.on('terminal:buffered', (msg) => {
       if (msg.terminalId !== terminalId) return;
       terminal.write(msg.data);
+      terminal.scrollToBottom();
+    }));
+
+    // Claude completion — scroll to bottom
+    cleanups.push(wsManager.on('terminal:claude', (msg) => {
+      if (msg.terminalId !== terminalId) return;
       terminal.scrollToBottom();
     }));
 
