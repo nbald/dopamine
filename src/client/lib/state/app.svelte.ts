@@ -17,6 +17,7 @@ export interface TerminalMeta {
   name: string;
   emoji: string;
   title_override: string | null;
+  is_docker: number;
   isAlive: boolean;
   title: string;
   liveCwd: string | null;
@@ -166,6 +167,14 @@ class AppState {
 
   async createTerminal(projectId: number, name?: string) {
     const t = await api.post<any>(`/projects/${projectId}/terminals`, { name: name || undefined });
+    const project = this.projects.find(p => p.id === projectId);
+    if (project) project.terminals = [...project.terminals, t];
+    this.activePane = { type: 'terminal', id: t.id };
+    return t;
+  }
+
+  async createDocker(projectId: number, name?: string) {
+    const t = await api.post<any>(`/projects/${projectId}/terminals`, { name: name || undefined, isDocker: true });
     const project = this.projects.find(p => p.id === projectId);
     if (project) project.terminals = [...project.terminals, t];
     this.activePane = { type: 'terminal', id: t.id };

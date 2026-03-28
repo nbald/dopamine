@@ -108,9 +108,10 @@
     <span class="expand-icon">{project.expanded ? '▼' : '▶'}</span>
     <span class="project-name" use:inlineEdit={{ value: project.name, onSave: (v) => appState.renameProject(project.id, v) }}>{project.name}</span>
     <div class="project-actions" class:visible={showActions || uiState.isMobile} onclick={(e) => e.stopPropagation()}>
-      <button class="act-btn" title="New terminal" onclick={() => appState.createTerminal(project.id)}>&gt;_</button>
-      <button class="act-btn" title="New note" onclick={() => appState.createNote(project.id)}>&#9776;</button>
-      <button class="act-btn" title="New iframe" onclick={() => appState.createIframe(project.id)}>&lt;/&gt;</button>
+      <button class="act-btn emoji-btn" title="New terminal" onclick={() => appState.createTerminal(project.id)}>💻</button>
+      <button class="act-btn emoji-btn" title="New docker sandbox" onclick={() => appState.createDocker(project.id)}>🐳</button>
+      <button class="act-btn emoji-btn" title="New note" onclick={() => appState.createNote(project.id)}>📝</button>
+      <button class="act-btn emoji-btn" title="New iframe" onclick={() => appState.createIframe(project.id)}>🌐</button>
       <button
         class="act-btn del"
         class:closing={deletingId === `p${project.id}`}
@@ -125,7 +126,37 @@
 
   {#if project.expanded}
     <div class="project-children">
-      {#each project.terminals as t (t.id)}
+      {#each project.terminals.filter(t => t.is_docker) as t (t.id)}
+        <div
+          class="tree-item docker-item"
+          class:active={isActive('terminal', t.id)}
+          draggable="true"
+          ondragstart={(e) => onItemDragStart('terminal', t.id, e)}
+          ondragend={onDragEnd}
+          onclick={() => appState.activePane = { type: 'terminal', id: t.id }}
+        >
+          <span class="icon">{t.emoji}</span>
+          <span class="label" use:inlineEdit={{ value: t.name, onSave: (v) => appState.renameTerminal(t.id, v) }}>{t.claudePrefix ? t.claudePrefix + ' ' : ''}{t.name}</span>
+          {#if t.isStopping}
+            <span class="stopping-dot"></span>
+          {:else if t.hasActivity}
+            <span class="activity-dot"></span>
+          {/if}
+          <button
+            class="item-del"
+            class:mobile-visible={uiState.isMobile}
+            class:closing={deletingId === `t${t.id}`}
+            title="Hold 3s to delete"
+            onclick={(e) => e.stopPropagation()}
+            onpointerdown={(e) => { e.stopPropagation(); startDelete(`t${t.id}`, () => appState.deleteTerminal(t.id)); }}
+            onpointerup={cancelDelete}
+            onpointercancel={cancelDelete}
+            onpointerleave={cancelDelete}
+          ><span>&#xd7;</span></button>
+        </div>
+      {/each}
+
+      {#each project.terminals.filter(t => !t.is_docker) as t (t.id)}
         <div
           class="tree-item"
           class:active={isActive('terminal', t.id)}
@@ -262,6 +293,23 @@
     transition: all var(--transition);
   }
   .act-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .act-btn[title] { position: relative; }
+  .act-btn[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 3px 8px;
+    background: var(--bg-surface, #3c3836);
+    color: var(--text-primary, #ebdbb2);
+    font-size: 14px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+    margin-top: 4px;
+  }
 
   .act-btn.del, .item-del {
     position: relative;
@@ -356,6 +404,10 @@
     box-shadow: 0 0 6px var(--red);
     flex-shrink: 0;
     animation: dot-pulse 1s ease-in-out infinite;
+  }
+
+  .emoji-btn {
+    font-size: 12px;
   }
 
   .activity-dot {

@@ -6,10 +6,12 @@ import { PtyHandle } from './pty-handle.js';
 import { config } from '../config.js';
 import { getDb } from '../db.js';
 import * as dtach from './dtach.js';
+import * as docker from './docker.js';
 
 class PtyManager {
   private handles = new Map<number, PtyHandle>();
   private useDtach = false;
+  private useDocker = false;
 
   onTitle: ((terminalId: number, title: string) => void) | null = null;
   onClaudeDone: ((terminalId: number) => void) | null = null;
@@ -18,6 +20,8 @@ class PtyManager {
 
   start(): void {
     fs.mkdirSync(config.historyDir, { recursive: true });
+
+    // 1. dtach — reattach existing sessions (host terminals + Docker terminals with live dtach)
     this.useDtach = dtach.isDtachAvailable();
     if (this.useDtach) {
       const dtachBin = dtach.getDtachPath()!;
@@ -27,6 +31,74 @@ class PtyManager {
     } else {
       console.log('dtach not found — terminals will not survive server restarts');
     }
+
+    // 2. Docker — build image, recover Docker terminals after host reboot, cleanup orphans
+    if (docker.isDockerAvailable()) {
+      this.useDocker = true;
+      console.log('Docker detected — sandbox terminals available');
+      try {
+        docker.buildImageIfNeeded();
+      } catch (e) {
+        console.error('Failed to build Docker base image:', e);
+        this.useDocker = false;
+        return;
+      }
+      this.recoverDockerTerminals();
+      this.cleanupOrphanedContainers();
+    }
+  }
+
+  /** Recover Docker terminals that lost their dtach sessions (e.g. after host reboot) */
+  private recoverDockerTerminals(): void {
+    const rows = getDb().prepare(
+      'SELECT id, project_id FROM terminals WHERE is_docker = 1'
+    ).all() as { id: number; project_id: number }[];
+
+    // Filter out terminals that already have handles (reattached via dtach)
+    const orphaned = rows.filter(r => !this.handles.has(r.id));
+    if (orphaned.length === 0) return;
+
+    // Group by project
+    const byProject = new Map<number, number[]>();
+    for (const r of orphaned) {
+      const list = byProject.get(r.project_id) || [];
+      list.push(r.id);
+      byProject.set(r.project_id, list);
+    }
+
+    console.log(`Recovering ${orphaned.length} Docker terminal(s) across ${byProject.size} project(s)...`);
+    for (const [projectId, terminalIds] of byProject) {
+      try {
+        docker.ensureContainer(projectId);
+        for (const terminalId of terminalIds) {
+          try {
+            this.spawn(terminalId);
+          } catch (e) {
+            console.error(`Failed to recover Docker terminal ${terminalId}:`, e);
+          }
+        }
+      } catch (e) {
+        console.error(`Failed to start container for project ${projectId}:`, e);
+      }
+    }
+  }
+
+  /** Remove Docker containers that have no matching project/terminals in DB */
+  private cleanupOrphanedContainers(): void {
+    const containerIds = docker.listAllContainers();
+    for (const projectId of containerIds) {
+      const row = getDb().prepare(
+        'SELECT COUNT(*) as count FROM terminals WHERE project_id = ? AND is_docker = 1'
+      ).get(projectId) as { count: number } | undefined;
+      if (!row || row.count === 0) {
+        console.log(`Removing orphaned Docker container dopamine-${projectId}`);
+        docker.removeContainer(projectId);
+      }
+    }
+  }
+
+  isDockerReady(): boolean {
+    return this.useDocker;
   }
 
   private reattachExisting(): void {
@@ -45,8 +117,8 @@ class PtyManager {
   }
 
   private attachToDtach(terminalId: number): PtyHandle {
-    const row = getDb().prepare('SELECT cols, rows FROM terminals WHERE id = ?').get(terminalId) as
-      { cols: number; rows: number } | undefined;
+    const row = getDb().prepare('SELECT cols, rows, is_docker FROM terminals WHERE id = ?').get(terminalId) as
+      { cols: number; rows: number; is_docker: number } | undefined;
     const cols = row?.cols || 80;
     const rows = row?.rows || 24;
 
@@ -57,7 +129,7 @@ class PtyManager {
       env: { ...process.env as Record<string, string>, TERM: 'xterm-256color' },
     });
 
-    const handle = new PtyHandle(terminalId, proc);
+    const handle = new PtyHandle(terminalId, proc, row?.is_docker === 1);
     this.wireHandle(handle);
     this.handles.set(terminalId, handle);
 
@@ -70,6 +142,19 @@ class PtyManager {
   }
 
   spawn(terminalId: number, opts: { cwd?: string; cols?: number; rows?: number } = {}): PtyHandle {
+    // Check if this is a Docker terminal
+    const termRow = getDb().prepare('SELECT is_docker, project_id FROM terminals WHERE id = ?').get(terminalId) as
+      { is_docker: number; project_id: number } | undefined;
+    const isDocker = termRow?.is_docker === 1;
+
+    if (isDocker && termRow) {
+      return this.spawnDocker(terminalId, termRow.project_id, opts);
+    }
+
+    return this.spawnHost(terminalId, opts);
+  }
+
+  private spawnHost(terminalId: number, opts: { cwd?: string; cols?: number; rows?: number }): PtyHandle {
     const histFile = path.join(config.historyDir, `terminal_${terminalId}.bash_history`);
     const cwd = opts.cwd || os.homedir();
     const cols = opts.cols || 80;
@@ -87,7 +172,6 @@ class PtyManager {
     let proc;
 
     if (this.useDtach) {
-      // dtach -A creates if not exists, attaches if exists
       proc = pty.spawn(dtach.getDtachPath()!, dtach.createAndAttachArgs(terminalId, config.shell), {
         name: 'xterm-256color',
         cols,
@@ -112,6 +196,49 @@ class PtyManager {
     try {
       getDb().prepare("UPDATE terminals SET is_dead = 0, exit_code = NULL, cwd = ?, updated_at = datetime('now') WHERE id = ?")
         .run(cwd, terminalId);
+    } catch {}
+
+    return handle;
+  }
+
+  private spawnDocker(terminalId: number, projectId: number, opts: { cols?: number; rows?: number }): PtyHandle {
+    const cols = opts.cols || 80;
+    const rows = opts.rows || 24;
+    const shell = config.docker.defaultShell;
+
+    // Ensure container is running
+    docker.ensureContainer(projectId);
+
+    let proc;
+    const dockerExecArgs = docker.execArgs(projectId, shell);
+
+    if (this.useDtach) {
+      // dtach -A socket -z docker exec -it -u uid -w /workspace container shell
+      proc = pty.spawn(dtach.getDtachPath()!, [
+        ...dtach.createAndAttachArgs(terminalId, 'docker'),
+        ...dockerExecArgs,
+      ], {
+        name: 'xterm-256color',
+        cols,
+        rows,
+        env: { ...process.env as Record<string, string>, TERM: 'xterm-256color' },
+      });
+    } else {
+      proc = pty.spawn('docker', dockerExecArgs, {
+        name: 'xterm-256color',
+        cols,
+        rows,
+        env: { ...process.env as Record<string, string>, TERM: 'xterm-256color' },
+      });
+    }
+
+    const handle = new PtyHandle(terminalId, proc, true);
+    this.wireHandle(handle);
+    this.handles.set(terminalId, handle);
+
+    try {
+      getDb().prepare("UPDATE terminals SET is_dead = 0, exit_code = NULL, updated_at = datetime('now') WHERE id = ?")
+        .run(terminalId);
     } catch {}
 
     return handle;
@@ -175,6 +302,14 @@ class PtyManager {
 
   getAll(): Map<number, PtyHandle> {
     return this.handles;
+  }
+
+  /** Kill all terminal handles for a project (used before project deletion) */
+  killProjectTerminals(projectId: number): void {
+    const rows = getDb().prepare('SELECT id FROM terminals WHERE project_id = ?').all(projectId) as { id: number }[];
+    for (const r of rows) {
+      this.kill(r.id);
+    }
   }
 
   isUsingDtach(): boolean {

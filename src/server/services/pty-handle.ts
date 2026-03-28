@@ -7,6 +7,7 @@ const RING_BUFFER_SIZE = 1024 * 1024; // 1MB for disconnect replay
 
 export class PtyHandle {
   readonly terminalId: number;
+  readonly isDocker: boolean;
   private pty: IPty;
   private ringBuffer: string[] = [];
   private ringBufferSize = 0;
@@ -21,8 +22,9 @@ export class PtyHandle {
   onExit: ((terminalId: number, exitCode: number) => void) | null = null;
   onActivity: ((terminalId: number) => void) | null = null;
 
-  constructor(terminalId: number, pty: IPty) {
+  constructor(terminalId: number, pty: IPty, isDocker = false) {
     this.terminalId = terminalId;
+    this.isDocker = isDocker;
     this.pty = pty;
 
     this.titleParser = new TitleParser();
@@ -66,6 +68,7 @@ export class PtyHandle {
 
   getCwd(): string | null {
     if (!this._alive) return null;
+    if (this.isDocker) return '/workspace';
     return getCwd(this.pty.pid);
   }
 

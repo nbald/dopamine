@@ -94,6 +94,7 @@ function migrate(db: Database.Database) {
     'ALTER TABLE notes ADD COLUMN emoji TEXT',
     'ALTER TABLE iframes ADD COLUMN emoji TEXT',
     'ALTER TABLE input_history ADD COLUMN project_id INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE terminals ADD COLUMN is_docker INTEGER NOT NULL DEFAULT 0',
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}

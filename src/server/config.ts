@@ -26,4 +26,10 @@ export const config = {
   certDir: path.join(dataDir, 'certs'),
   historyDir: path.join(dataDir, 'history'),
   isProd: process.env.NODE_ENV === 'production',
+  docker: {
+    defaultShell: process.env.DOPAMINE_DOCKER_SHELL || '/bin/bash',
+    volumeBase: path.join(dataDir, 'docker'),
+    credentialsFile: path.join(os.homedir(), '.claude', '.credentials.json'),
+    baseImage: 'dopamine-base',
+  },
 };

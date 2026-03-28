@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db.js';
+import { ptyManager } from '../services/pty-manager.js';
+import * as docker from '../services/docker.js';
 import { sanitizeName } from '../utils/sanitize.js';
 import { assignProjectCategory } from '../utils/emoji.js';
 
@@ -66,8 +68,19 @@ router.put('/projects/:id', (req, res) => {
 
 router.delete('/projects/:id', (req, res) => {
   const { id } = req.params;
-  getDb().prepare('DELETE FROM input_history WHERE project_id = ?').run(Number(id));
-  getDb().prepare('DELETE FROM projects WHERE id = ?').run(Number(id));
+  const projectId = Number(id);
+
+  // Kill all terminal handles for this project (prevents orphaned PtyHandles)
+  const terminals = getDb().prepare('SELECT id FROM terminals WHERE project_id = ?').all(projectId) as { id: number }[];
+  for (const t of terminals) {
+    ptyManager.kill(t.id);
+  }
+
+  // Remove Docker container if any (idempotent)
+  docker.removeContainer(projectId);
+
+  getDb().prepare('DELETE FROM input_history WHERE project_id = ?').run(projectId);
+  getDb().prepare('DELETE FROM projects WHERE id = ?').run(projectId);
   res.status(204).end();
 });
 
