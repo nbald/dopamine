@@ -85,7 +85,7 @@
   ondrop={onDrop}
   role="group"
 >
-  <div class="pane-header" draggable="true" ondragstart={onDragStart}>
+  <div class="pane-header" draggable="true" ondragstart={onDragStart} role="toolbar">
     {#if paneInfo}
       <span class="pane-title">
         <span class="pane-panel">{paneInfo.emoji} {paneInfo.claudePrefix ? paneInfo.claudePrefix + ' ' : ''}{paneInfo.name}</span>
