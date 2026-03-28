@@ -92,7 +92,7 @@ export class PtyHandle {
 
   destroy(): void {
     if (this._alive) {
-      try { this.pty.kill('SIGHUP'); } catch { /* already dead */ }
+      try { this.pty.kill('SIGKILL'); } catch { /* already dead */ }
     }
     this.clients.clear();
   }

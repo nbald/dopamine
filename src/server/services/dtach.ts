@@ -45,9 +45,19 @@ export function attachArgs(terminalId: number): string[] {
   return ['-a', socketPath(terminalId), '-z'];
 }
 
-/** Kill a dtach session by removing the socket */
+/** Kill a dtach session: find processes using the socket, kill them, remove socket */
 export function killSession(terminalId: number): void {
   const sock = socketPath(terminalId);
+
+  // Find all processes holding this unix socket and kill them
+  try {
+    const out = execFileSync('fuser', [sock], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const pids = out.split(/\s+/).map(Number).filter(Boolean);
+    for (const pid of pids) {
+      try { process.kill(pid, 'SIGKILL'); } catch {}
+    }
+  } catch {}
+
   try { fs.unlinkSync(sock); } catch {}
 }
 
