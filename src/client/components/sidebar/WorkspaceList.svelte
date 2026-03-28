@@ -60,8 +60,7 @@
 
   async function addWorkspace() {
     if (!newName.trim()) return;
-    const layout = layoutState.serializeLayout();
-    const ws = await api.post<Workspace>('/workspaces', { name: newName.trim(), layout });
+    const ws = await api.post<Workspace>('/workspaces', { name: newName.trim(), layout: '{}' });
     workspaces = [...workspaces, ws];
     layoutState.loadWorkspace(ws.id, ws.layout);
     layoutState.switchWorkspace(ws.id);
