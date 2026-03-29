@@ -110,6 +110,10 @@ init_pty(char **argv, int statusfd)
 	/* Use the original terminal's settings. We don't have to set the
 	** window size here, because the attacher will send it in a packet. */
 	the_pty.term = orig_term;
+	/* Force raw mode: dtach is a transparent relay, so the master pty
+	** should not do any line-discipline processing (echo, canonical
+	** buffering, etc.). The child program manages its own termios. */
+	cfmakeraw(&the_pty.term);
 	memset(&the_pty.ws, 0, sizeof(struct winsize));
 
 	/* Create the pty process */
