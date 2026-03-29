@@ -21,7 +21,8 @@ class PtyManager {
   start(): void {
     fs.mkdirSync(config.historyDir, { recursive: true });
 
-    // 1. dtach — reattach existing sessions (host terminals + Docker terminals with live dtach)
+    // 1. dtach — compile if needed, then reattach existing sessions
+    dtach.ensureDtach();
     this.useDtach = dtach.isDtachAvailable();
     if (this.useDtach) {
       const dtachBin = dtach.getDtachPath()!;

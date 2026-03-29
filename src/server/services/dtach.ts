@@ -1,10 +1,65 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
 
 let dtachPath: string | null | undefined = undefined;
 let socketDir: string | null = null;
+
+const SOURCE_FILES = ['attach.c', 'master.c', 'main.c', 'dtach.h', 'configure', 'config.h.in', 'Makefile.in'];
+
+function hasCommand(cmd: string): boolean {
+  try {
+    execFileSync('sh', ['-c', `command -v ${cmd}`], { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Compile bundled dtach at startup if needed */
+export function ensureDtach(): void {
+  if (process.platform === 'win32') return;
+
+  const dtachDir = path.resolve(import.meta.dirname, '../../../vendor/dtach');
+  const dtachBinary = path.join(dtachDir, 'dtach');
+
+  // Already compiled and up to date?
+  if (fs.existsSync(dtachBinary)) {
+    const binaryMtime = fs.statSync(dtachBinary).mtimeMs;
+    const allOlder = SOURCE_FILES.every(f => {
+      const fp = path.join(dtachDir, f);
+      return fs.existsSync(fp) && fs.statSync(fp).mtimeMs <= binaryMtime;
+    });
+    if (allOlder) return;
+  }
+
+  // Need to compile — check toolchain
+  if (!hasCommand('cc') || !hasCommand('make')) {
+    console.warn(
+      'dtach: cannot compile — cc or make not found.\n' +
+      '  Terminal sessions will not persist across restarts.\n' +
+      '  Install build tools (e.g. apt install build-essential) and restart to enable persistence.'
+    );
+    return;
+  }
+
+  // Compile: execSync is used intentionally — ./configure is a vendored autoconf
+  // script (not user input) that requires shell execution.
+  try {
+    fs.chmodSync(path.join(dtachDir, 'configure'), 0o755);
+    execSync('./configure', { cwd: dtachDir, stdio: 'pipe' });
+    execSync('make', { cwd: dtachDir, stdio: 'pipe' });
+    console.log('dtach: compiled successfully');
+  } catch (e: any) {
+    console.warn('dtach: compilation failed, sessions will not persist');
+    if (e.stderr) console.warn(e.stderr.toString());
+    return;
+  }
+
+  // Reset cache so getDtachPath() picks up the new binary
+  dtachPath = undefined;
+}
 
 /** Resolve the dtach binary: bundled first, then system PATH */
 export function getDtachPath(): string | null {
