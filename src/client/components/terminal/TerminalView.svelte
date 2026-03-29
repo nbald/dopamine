@@ -105,6 +105,44 @@
   let savedDraft = $state('');
   let floatingInputText = $state(_stored?.text ?? '');
   let floatingInputEl: HTMLTextAreaElement | undefined = $state();
+  let swipeStartX = 0;
+  let swipeStartY = 0;
+  let swipeDirection: 'left' | 'right' | 'up' | 'down' | null = null;
+  let swipeRepeatTimer: ReturnType<typeof setInterval> | null = null;
+
+  function applySwipeCursorMove(dir: 'left' | 'right' | 'up' | 'down') {
+    if (!floatingInputEl) return;
+    const pos = floatingInputEl.selectionStart ?? 0;
+    const val = floatingInputEl.value;
+    let newPos = pos;
+    if (dir === 'left' || dir === 'right') {
+      newPos = dir === 'left' ? Math.max(0, pos - 1) : Math.min(val.length, pos + 1);
+    } else {
+      if (pos === 0 && floatingInputEl.selectionEnd === 0) {
+        navigateHistory(dir === 'up' ? 'up' : 'down');
+        return;
+      }
+      const lines = val.split('\n');
+      let lineIndex = 0, acc = 0;
+      for (let i = 0; i < lines.length; i++) {
+        if (acc + lines[i].length >= pos) { lineIndex = i; break; }
+        acc += lines[i].length + 1;
+      }
+      const col = pos - acc;
+      const target = dir === 'up' ? Math.max(0, lineIndex - 1) : Math.min(lines.length - 1, lineIndex + 1);
+      if (target !== lineIndex) {
+        let targetStart = 0;
+        for (let i = 0; i < target; i++) targetStart += lines[i].length + 1;
+        newPos = targetStart + Math.min(col, lines[target].length);
+      }
+    }
+    floatingInputEl.setSelectionRange(newPos, newPos);
+  }
+
+  function stopSwipeRepeat() {
+    if (swipeRepeatTimer) { clearInterval(swipeRepeatTimer); swipeRepeatTimer = null; }
+    swipeDirection = null;
+  }
 
   // Sync floating input state back to persistent store + localStorage
   $effect(() => {
@@ -619,6 +657,19 @@
         autocorrect="off"
         autocapitalize="off"
         spellcheck="false"
+        ontouchstart={(e) => { swipeStartX = e.touches[0].clientX; swipeStartY = e.touches[0].clientY; stopSwipeRepeat(); }}
+        ontouchmove={(e) => {
+          if (swipeDirection) return;
+          const dx = e.touches[0].clientX - swipeStartX;
+          const dy = e.touches[0].clientY - swipeStartY;
+          if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+          swipeDirection = Math.abs(dx) > Math.abs(dy)
+            ? (dx < 0 ? 'left' : 'right')
+            : (dy < 0 ? 'up' : 'down');
+          applySwipeCursorMove(swipeDirection);
+          swipeRepeatTimer = setInterval(() => applySwipeCursorMove(swipeDirection!), 300);
+        }}
+        ontouchend={() => stopSwipeRepeat()}
         oninput={() => { if (historyIndex !== -1) historyIndex = -1; }}
         onkeydown={(e) => {
           if (e.key === 'Tab' && e.shiftKey) {
@@ -911,6 +962,7 @@
   }
   .floating-mobile .floating-textarea {
     width: 100%;
+    touch-action: none;
   }
 
   /* Mobile: button bar below textarea */
