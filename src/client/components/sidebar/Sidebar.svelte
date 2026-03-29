@@ -84,6 +84,7 @@
     {/each}
   </div>
   <ClaudeUsage />
+  <div class="made-in">Made with love in Aiguebelle, Maurienne</div>
 </aside>
 
 <style>
@@ -224,5 +225,14 @@
     color: var(--text-primary);
     font-size: 13px;
     outline: none;
+  }
+
+  .made-in {
+    padding: 4px 14px 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border-subtle);
+    text-align: center;
+    flex-shrink: 0;
   }
 </style>
