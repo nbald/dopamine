@@ -651,7 +651,7 @@
         bind:this={floatingInputEl}
         bind:value={floatingInputText}
         class="floating-textarea"
-        placeholder={uiState.isMobile ? "Type here, send when ready..." : "Type here, send when ready...\n\n[⏎ Enter] new line\n[⇧ Shift]+[⏎ Enter] send"}
+        placeholder={uiState.isMobile ? "Type here, send when ready..." : "Type here, send when ready...\n[⏎ Enter] new line\n[⇧ Shift]+[⏎ Enter] send\n[▲ Up][▼ Down] history"}
         rows={uiState.isMobile ? 3 : 6}
         autocomplete="off"
         autocorrect="off"
@@ -672,22 +672,48 @@
         ontouchend={() => stopSwipeRepeat()}
         oninput={() => { if (historyIndex !== -1) historyIndex = -1; }}
         onkeydown={(e) => {
-          if (e.key === 'Tab' && e.shiftKey) {
-            e.preventDefault();
-            sendTermKey('\x1b[Z');
-            return;
-          }
-          if (e.key === 'Enter' && e.shiftKey) {
-            e.preventDefault();
-            if (!floatingInputText.trim()) {
-              sendTermKey('\r');
-            } else {
-              sendFloatingInput();
+          if (e.shiftKey) {
+            const keyMap: Record<string, string> = {
+              ArrowUp: '\x1b[A', ArrowDown: '\x1b[B',
+              ArrowLeft: '\x1b[D', ArrowRight: '\x1b[C',
+              Escape: '\x1b', Backspace: '\x7f',
+            };
+            if (keyMap[e.key]) {
+              e.preventDefault();
+              sendTermKey(keyMap[e.key]);
+              return;
             }
+            if (e.key === 'Tab') {
+              e.preventDefault();
+              sendTermKey('\x1b[Z');
+              return;
+            }
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (!floatingInputText.trim()) {
+                sendTermKey('\r');
+              } else {
+                sendFloatingInput();
+              }
+              return;
+            }
+          }
+          if (e.key === 'Backspace' && !floatingInputText) {
+            e.preventDefault();
+            sendTermKey('\x7f');
             return;
           }
           if (e.key === 'Escape') {
-            toggleFloatingInput();
+            e.preventDefault();
+            if (floatingInputText.trim()) {
+              pushHistory(projectId, floatingInputText.trimEnd());
+              floatingInputText = '';
+              historyIndex = -1;
+              savedDraft = '';
+            } else {
+              sendTermKey('\x1b');
+            }
+            return;
           }
           if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && floatingInputEl?.selectionStart === 0 && floatingInputEl?.selectionEnd === 0) {
             e.preventDefault();
