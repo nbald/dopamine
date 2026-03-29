@@ -651,7 +651,7 @@
         bind:this={floatingInputEl}
         bind:value={floatingInputText}
         class="floating-textarea"
-        placeholder="Type here, send when ready..."
+        placeholder={uiState.isMobile ? "Type here, send when ready..." : "Type here, send when ready...\n\n[⏎ Enter] new line\n[⇧ Shift]+[⏎ Enter] send"}
         rows={uiState.isMobile ? 3 : 6}
         autocomplete="off"
         autocorrect="off"
@@ -718,7 +718,7 @@
         </div>
       {:else}
         <div class="compose-btns">
-          <button class="side-btn send-btn" title="Send (Shift+Enter)" onclick={sendFloatingInput}>&#x21B5;</button>
+          <button class="side-btn send-btn" title="Send (Shift+Enter)" onclick={sendFloatingInput}>&#x27A4;</button>
           <button class="side-btn muted-btn" title="Clear" onclick={clearFloatingInput}>&#x232B;</button>
           <button class="side-btn muted-btn" title="Hide" onclick={toggleFloatingInput}>&#x25BE;</button>
         </div>
