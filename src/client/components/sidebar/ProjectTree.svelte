@@ -109,7 +109,7 @@
     <span class="project-name" use:inlineEdit={{ value: project.name, onSave: (v) => appState.renameProject(project.id, v) }}>{project.name}</span>
     <div class="project-actions" class:visible={showActions || uiState.isMobile} onclick={(e) => e.stopPropagation()}>
       <button class="act-btn emoji-btn" title="New terminal" onclick={() => appState.createTerminal(project.id)}>💻</button>
-      <button class="act-btn emoji-btn" title="New docker sandbox" onclick={() => appState.createDocker(project.id)}>🐳</button>
+      {#if appState.dockerAvailable}<button class="act-btn emoji-btn" title="New docker sandbox" onclick={() => appState.createDocker(project.id)}>🐳</button>{/if}
       <button class="act-btn emoji-btn" title="New note" onclick={() => appState.createNote(project.id)}>📝</button>
       <button class="act-btn emoji-btn" title="New iframe" onclick={() => appState.createIframe(project.id)}>🌐</button>
       <button

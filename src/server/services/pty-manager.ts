@@ -22,19 +22,25 @@ class PtyManager {
     fs.mkdirSync(config.historyDir, { recursive: true });
 
     // 1. dtach — compile if needed, then reattach existing sessions
-    dtach.ensureDtach();
-    this.useDtach = dtach.isDtachAvailable();
-    if (this.useDtach) {
-      const dtachBin = dtach.getDtachPath()!;
-      const source = dtachBin !== 'dtach' ? 'bundled' : 'system';
-      console.log(`dtach detected (${source}) — terminals will persist across server restarts`);
-      this.reattachExisting();
+    if (process.env.DISABLE_DTACH) {
+      console.log('dtach disabled via DISABLE_DTACH — terminals will not survive server restarts');
     } else {
-      console.log('dtach not found — terminals will not survive server restarts');
+      dtach.ensureDtach();
+      this.useDtach = dtach.isDtachAvailable();
+      if (this.useDtach) {
+        const dtachBin = dtach.getDtachPath()!;
+        const source = dtachBin !== 'dtach' ? 'bundled' : 'system';
+        console.log(`dtach detected (${source}) — terminals will persist across server restarts`);
+        this.reattachExisting();
+      } else {
+        console.log('dtach not found — terminals will not survive server restarts');
+      }
     }
 
     // 2. Docker — build image, recover Docker terminals after host reboot, cleanup orphans
-    if (docker.isDockerAvailable()) {
+    if (process.env.DISABLE_DOCKER) {
+      console.log('Docker disabled via DISABLE_DOCKER — sandbox terminals unavailable');
+    } else if (docker.isDockerAvailable()) {
       this.useDocker = true;
       console.log('Docker detected — sandbox terminals available');
       try {

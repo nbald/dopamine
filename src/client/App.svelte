@@ -65,7 +65,8 @@
 
   async function checkAuth() {
     try {
-      const status = await api.get<{ needsSetup: boolean; authenticated: boolean }>('/auth/status');
+      const status = await api.get<{ needsSetup: boolean; authenticated: boolean; dockerAvailable: boolean }>('/auth/status');
+      appState.dockerAvailable = status.dockerAvailable;
       if (status.needsSetup) {
         state = 'setup';
       } else if (status.authenticated) {

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { isSetupDone, login, verifyToken } from '../auth.js';
 import { loginLimiter } from '../middleware/rate-limit.js';
+import { ptyManager } from '../services/pty-manager.js';
 
 const router = Router();
 
@@ -16,7 +17,7 @@ router.get('/status', (req, res) => {
   const needsSetup = !isSetupDone();
   const token = req.cookies?.token;
   const authenticated = token ? verifyToken(token) : false;
-  res.json({ needsSetup, authenticated });
+  res.json({ needsSetup, authenticated, dockerAvailable: ptyManager.isDockerReady() });
 });
 
 router.post('/setup', (_req, res) => {

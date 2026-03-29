@@ -54,6 +54,7 @@ const LS_EXPANDED = 'dopamine:expandedProjects';
 class AppState {
   projects = $state<Project[]>([]);
   hostname = $state('');
+  dockerAvailable = $state(false);
   onPaneRemoved: ((type: string, id: number) => void) | null = null;
 
   private _activePane = $state<PaneContent>(null);
