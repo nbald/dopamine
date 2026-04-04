@@ -16,6 +16,7 @@
   import NoteEditor from './components/notes/NoteEditor.svelte';
   import IframeView from './components/iframe/IframeView.svelte';
   import FuzzyFinder from './components/modals/FuzzyFinder.svelte';
+  import Clippy from 'better-clippy';
   import { toastState } from './lib/state/toast.svelte.js';
 
   let fuzzyOpen = $state(false);
@@ -345,6 +346,28 @@
 
 <ToastContainer />
 <FuzzyFinder visible={fuzzyOpen} onClose={() => fuzzyOpen = false} />
+<Clippy tips={[
+  "Press Ctrl+P to quickly jump to any terminal, note, or iframe.",
+  "You can drag and drop files directly onto a terminal to upload them!",
+  "Try Ctrl+1 through Ctrl+9 to switch between workspaces instantly.",
+  "Double-click any name in the sidebar to rename it inline.",
+  "Hold the delete button for 3 seconds to confirm destructive actions. Safety first!",
+  "You can split panes vertically or horizontally to see multiple terminals at once.",
+  "Text selected in a terminal is automatically copied to your clipboard.",
+  "Drag a terminal from one project to another to reorganize your workspace.",
+  "Middle-click in a terminal to paste from your clipboard.",
+  "The green flash means Claude Code just finished a task in one of your terminals!",
+  "You can maximize any pane to fullscreen, then restore the previous layout.",
+  "Drag the divider between split panes to resize them.",
+  "Your command history is saved per project. Press Up/Down in the compose area to browse it.",
+  "On mobile, swipe left/right on the compose bar to move your cursor!",
+  "The activity dot on a terminal means there's new output you haven't seen yet.",
+  "Each terminal has a 1MB replay buffer. Reconnect and you won't lose any output.",
+  "You can create Docker sandboxed terminals for isolated environments.",
+  "Press Ctrl+F in a terminal to search through its output.",
+  "Workspaces let you save completely different pane layouts and switch between them.",
+  "Your floating input text is saved per terminal. Switch away and come back without losing your draft.",
+]} />
 
 <style>
   .center {

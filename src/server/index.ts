@@ -18,6 +18,8 @@ import workspaceRoutes from './routes/workspace.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
 import claudeRoutes from './routes/claude.routes.js';
 import historyRoutes from './routes/history.routes.js';
+import iframeProxyRoutes from './routes/iframe-proxy.js';
+import { handleIframeWsProxy } from './routes/iframe-proxy.js';
 import { setupWebSocket, setWss } from './ws/handler.js';
 import { ptyManager } from './services/pty-manager.js';
 
@@ -34,6 +36,9 @@ const { key, cert } = loadOrGenerateCerts();
 const app = express();
 app.use(securityHeaders);
 app.use(cookieParser());
+// Iframe proxy — mounted before body parsing to preserve raw streams
+app.use('/api/iframe-proxy', authMiddleware, iframeProxyRoutes);
+
 app.use(express.json({ limit: '1mb' }));
 
 // Auth routes (no auth middleware)
@@ -67,6 +72,13 @@ const server = https.createServer({ key, cert }, app);
 // WebSocket
 const wss = setupWebSocket(server);
 setWss(wss);
+
+// Iframe proxy WebSocket upgrades
+server.on('upgrade', (req, socket, head) => {
+  if (req.url?.startsWith('/api/iframe-proxy/')) {
+    handleIframeWsProxy(req, socket, head);
+  }
+});
 
 server.listen(config.port, config.bind, () => {
   console.log(`Dopamine running at https://${config.bind}:${config.port}`);

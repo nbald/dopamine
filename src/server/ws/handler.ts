@@ -12,6 +12,9 @@ export function setupWebSocket(server: Server): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (req, socket, head) => {
+    // Iframe proxy WebSocket connections are handled separately
+    if (req.url?.startsWith('/api/iframe-proxy/')) return;
+
     if (!req.url?.startsWith('/ws')) {
       socket.destroy();
       return;
