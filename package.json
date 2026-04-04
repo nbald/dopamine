@@ -16,7 +16,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "better-clippy": "file:../better-clippy",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-search": "^0.15.0",
     "@xterm/addon-serialize": "^0.13.0",

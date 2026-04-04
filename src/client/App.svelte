@@ -16,7 +16,7 @@
   import NoteEditor from './components/notes/NoteEditor.svelte';
   import IframeView from './components/iframe/IframeView.svelte';
   import FuzzyFinder from './components/modals/FuzzyFinder.svelte';
-  import Clippy from 'better-clippy';
+  // import Clippy from 'better-clippy';
   import { toastState } from './lib/state/toast.svelte.js';
 
   let fuzzyOpen = $state(false);
@@ -346,7 +346,7 @@
 
 <ToastContainer />
 <FuzzyFinder visible={fuzzyOpen} onClose={() => fuzzyOpen = false} />
-<Clippy tips={[
+<!-- <Clippy tips={[
   "Press Ctrl+P to quickly jump to any terminal, note, or iframe.",
   "You can drag and drop files directly onto a terminal to upload them!",
   "Try Ctrl+1 through Ctrl+9 to switch between workspaces instantly.",
@@ -367,7 +367,7 @@
   "Press Ctrl+F in a terminal to search through its output.",
   "Workspaces let you save completely different pane layouts and switch between them.",
   "Your floating input text is saved per terminal. Switch away and come back without losing your draft.",
-]} />
+]} /> -->
 
 <style>
   .center {
