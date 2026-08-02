@@ -44,6 +44,8 @@ int redraw_method = REDRAW_UNSPEC;
 */
 struct termios orig_term;
 int dont_have_tty;
+/* Whether to force the master pty into raw mode (-R). */
+int raw_pty;
 
 /* Write buf to fd handling partial writes. Exit on failure. */
 void
@@ -121,6 +123,8 @@ usage()
 	       "\t\t   ctrl_l: Send a Ctrl L character to the program.\n"
 	       "\t\t    winch: Send a WINCH signal to the program.\n"
 	       "  -z\t\tDisable processing of the suspend key.\n"
+	       "  -R\t\tStart the program in a raw pty (no echo or line\n"
+	       "\t\t  discipline; for programs that relay another terminal).\n"
 	       "\nReport any bugs to <" PACKAGE_BUGREPORT ">.\n",
 		PACKAGE_VERSION, __DATE__, __TIME__);
 	exit(0);
@@ -207,6 +211,8 @@ main(int argc, char **argv)
 				detach_char = -1;
 			else if (*p == 'z')
 				no_suspend = 1;
+			else if (*p == 'R')
+				raw_pty = 1;
 			else if (*p == 'e')
 			{
 				++argv; --argc;

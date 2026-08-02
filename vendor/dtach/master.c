@@ -110,10 +110,14 @@ init_pty(char **argv, int statusfd)
 	/* Use the original terminal's settings. We don't have to set the
 	** window size here, because the attacher will send it in a packet. */
 	the_pty.term = orig_term;
-	/* Force raw mode: dtach is a transparent relay, so the master pty
-	** should not do any line-discipline processing (echo, canonical
-	** buffering, etc.). The child program manages its own termios. */
-	cfmakeraw(&the_pty.term);
+	/* With -R, force raw mode. Only for programs that are themselves
+	** terminal relays (e.g. docker exec -it): it stops the master pty
+	** from echoing terminal query responses (DA etc.) back at startup.
+	** Regular programs (shells) need the normal line discipline: bash's
+	** readline mirrors the inherited ECHO flag, so a raw pty here means
+	** typed characters are never echoed. */
+	if (raw_pty)
+		cfmakeraw(&the_pty.term);
 	memset(&the_pty.ws, 0, sizeof(struct winsize));
 
 	/* Create the pty process */

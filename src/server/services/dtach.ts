@@ -109,9 +109,14 @@ export function sessionExists(terminalId: number): boolean {
   return fs.existsSync(sock);
 }
 
-/** Get dtach args to create and attach in one go (dtach -A) */
-export function createAndAttachArgs(terminalId: number, shell: string): string[] {
-  return ['-A', socketPath(terminalId), '-z', shell];
+/**
+ * Get dtach args to create and attach in one go (dtach -A).
+ * `rawPty` (-R) skips the pty line discipline (echo, \n→\r\n, …); only for
+ * programs that relay another terminal (docker exec -it), where it prevents
+ * terminal query responses from being echoed back. A shell needs it off.
+ */
+export function createAndAttachArgs(terminalId: number, shell: string, rawPty = false): string[] {
+  return ['-A', socketPath(terminalId), '-z', ...(rawPty ? ['-R'] : []), shell];
 }
 
 /** Get dtach args to attach to existing session */

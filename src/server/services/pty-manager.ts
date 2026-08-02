@@ -220,9 +220,9 @@ class PtyManager {
     const dockerExecArgs = docker.execArgs(projectId, shell);
 
     if (this.useDtach) {
-      // dtach -A socket -z docker exec -it -u uid -w /workspace container shell
+      // dtach -A socket -z -R docker exec -it -u uid -w /workspace container shell
       proc = pty.spawn(dtach.getDtachPath()!, [
-        ...dtach.createAndAttachArgs(terminalId, 'docker'),
+        ...dtach.createAndAttachArgs(terminalId, 'docker', true),
         ...dockerExecArgs,
       ], {
         name: 'xterm-256color',

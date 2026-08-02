@@ -97,6 +97,7 @@ extern char *progname, *sockname;
 extern int detach_char, no_suspend, redraw_method;
 extern struct termios orig_term;
 extern int dont_have_tty;
+extern int raw_pty;
 
 enum
 {
