@@ -22,6 +22,8 @@ import iframeProxyRoutes from './routes/iframe-proxy.js';
 import { handleIframeWsProxy } from './routes/iframe-proxy.js';
 import { setupWebSocket, setWss } from './ws/handler.js';
 import { ptyManager } from './services/pty-manager.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { buildMcpServer } from './mcp/server.js';
 
 // Initialize database
 const db = initDb();
@@ -55,6 +57,22 @@ app.use('/api', workspaceRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api', claudeRoutes);
 app.use('/api', historyRoutes);
+
+// MCP endpoint (Streamable HTTP, stateless per-request). Same JWT auth (Bearer or cookie).
+app.post('/mcp', authMiddleware, async (req, res) => {
+  const mcp = buildMcpServer();
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  res.on('close', () => { void transport.close(); void mcp.close(); });
+  try {
+    await mcp.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (err) {
+    console.error('MCP request error:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'MCP internal error' });
+  }
+});
+// Stateless transport only handles POST; reject other methods cleanly (avoids the SPA fallback).
+app.all('/mcp', (_req, res) => res.status(405).json({ error: 'Method Not Allowed; use POST /mcp' }));
 
 // Serve frontend in production
 if (config.isProd) {

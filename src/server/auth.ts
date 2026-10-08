@@ -21,6 +21,12 @@ export function signToken(): string {
   return jwt.sign({}, secret, { expiresIn: '30d' });
 }
 
+/** Long-lived token (no expiry) for headless clients — e.g. the MCP / Hermès integration. */
+export function signLongLivedToken(): string {
+  const secret = getJwtSecret();
+  return jwt.sign({ kind: 'mcp' }, secret);
+}
+
 export function verifyToken(token: string): boolean {
   try {
     const secret = getJwtSecret();

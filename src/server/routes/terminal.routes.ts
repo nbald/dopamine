@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db.js';
 import { ptyManager } from '../services/pty-manager.js';
-import * as docker from '../services/docker.js';
-import { assignPanelEmoji, generatePanelName } from '../utils/emoji.js';
+import { createTerminal, killTerminal } from '../services/terminal-service.js';
 
 const router = Router();
 
@@ -19,6 +18,7 @@ router.get('/projects/:pid/terminals', (req, res) => {
     return {
       ...row,
       isAlive: handle?.alive ?? false,
+      isBusy: handle?.isBusy() ?? false,
       title: handle?.title || row.title_override || row.name,
       liveCwd: handle?.getCwd() || row.cwd,
     };
@@ -31,38 +31,12 @@ router.get('/projects/:pid/terminals', (req, res) => {
 router.post('/projects/:pid/terminals', (req, res) => {
   const { pid } = req.params;
   const { name, cwd, isDocker } = req.body;
-
-  // Check Docker availability
-  if (isDocker && !ptyManager.isDockerReady()) {
-    res.status(400).json({ error: 'Docker is not available on this server' });
-    return;
+  try {
+    const terminal = createTerminal(Number(pid), { name, cwd, isDocker });
+    res.status(201).json(terminal);
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
   }
-
-  // Get max sort_order
-  const max = getDb().prepare(
-    'SELECT COALESCE(MAX(sort_order), -1) as m FROM terminals WHERE project_id = ?'
-  ).get(Number(pid)) as { m: number };
-
-  const emoji = assignPanelEmoji(getDb(), Number(pid));
-  const terminalName = name || generatePanelName(emoji);
-  const result = getDb().prepare(
-    'INSERT INTO terminals (project_id, name, sort_order, cwd, emoji, is_docker) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(Number(pid), terminalName, max.m + 1, cwd || null, emoji, isDocker ? 1 : 0);
-
-  const terminalId = Number(result.lastInsertRowid);
-
-  // Spawn PTY
-  const handle = ptyManager.spawn(terminalId, { cwd: cwd || undefined });
-
-  res.status(201).json({
-    id: terminalId,
-    project_id: Number(pid),
-    name: terminalName,
-    emoji,
-    is_docker: isDocker ? 1 : 0,
-    isAlive: handle.alive,
-    cwd: handle.getCwd(),
-  });
 });
 
 // Update terminal
@@ -100,26 +74,7 @@ router.post('/terminals/:id/stop', (req, res) => {
 
 // Force kill (SIGKILL) + delete from DB
 router.delete('/terminals/:id', (req, res) => {
-  const { id } = req.params;
-  const terminalId = Number(id);
-
-  // Query terminal info BEFORE deleting (need is_docker + project_id for cleanup)
-  const term = getDb().prepare('SELECT is_docker, project_id FROM terminals WHERE id = ?').get(terminalId) as
-    { is_docker: number; project_id: number } | undefined;
-
-  ptyManager.kill(terminalId);
-  getDb().prepare('DELETE FROM terminals WHERE id = ?').run(terminalId);
-
-  // If last Docker terminal in project, remove the container (keep volume files)
-  if (term?.is_docker) {
-    const remaining = getDb().prepare(
-      'SELECT COUNT(*) as count FROM terminals WHERE project_id = ? AND is_docker = 1'
-    ).get(term.project_id) as { count: number };
-    if (remaining.count === 0) {
-      docker.removeContainer(term.project_id);
-    }
-  }
-
+  killTerminal(Number(req.params.id));
   res.status(204).end();
 });
 
