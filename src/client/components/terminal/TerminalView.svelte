@@ -98,6 +98,8 @@
   let showSearch = $state(false);
   let searchQuery = $state('');
   let isDead = $state(false);
+  let showSelectOverlay = $state(false);
+  let selectOverlayText = $state('');
   let exitCode = $state<number | null>(null);
   let showDropOverlay = $state(false);
   let showFloatingInput = $state(_stored?.open ?? true);
@@ -288,8 +290,44 @@
       let touchAccum = 0;
       let velocity = 0;
       let momentumRaf = 0;
+      let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
       const getLineHeight = () => containerEl.clientHeight / terminal.rows;
+
+      function cancelLongPress() {
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      }
+
+      function openSelectOverlay() {
+        const buf = terminal.buffer.active;
+        // Collect visible lines
+        const visibleLines: string[] = [];
+        for (let i = 0; i < terminal.rows; i++) {
+          const line = buf.getLine(buf.viewportY + i);
+          visibleLines.push(line ? line.translateToString(true) : '');
+        }
+        const visibleText = visibleLines.join('\n').trimEnd();
+
+        // Collect history lines above viewport (up to 2000 chars)
+        const historyLines: string[] = [];
+        let historyLen = 0;
+        for (let i = buf.viewportY - 1; i >= 0 && historyLen < 2000; i--) {
+          const line = buf.getLine(i);
+          const text = line ? line.translateToString(true) : '';
+          historyLines.unshift(text);
+          historyLen += text.length + 1;
+        }
+        const historyText = historyLines.join('\n').trimEnd();
+        // Trim history to 2000 chars from the end (most recent)
+        const trimmedHistory = historyText.length > 2000
+          ? historyText.slice(-2000)
+          : historyText;
+
+        selectOverlayText = trimmedHistory
+          ? trimmedHistory + '\n' + visibleText
+          : visibleText;
+        showSelectOverlay = true;
+      }
 
       touchOverlayEl.addEventListener('touchstart', (e) => {
         cancelAnimationFrame(momentumRaf);
@@ -300,6 +338,8 @@
         lastTouchY = touchStartY;
         lastTouchTime = performance.now();
         isSwiping = false;
+        cancelLongPress();
+        longPressTimer = setTimeout(openSelectOverlay, 500);
       }, { passive: true });
 
       touchOverlayEl.addEventListener('touchmove', (e) => {
@@ -309,6 +349,7 @@
         if (!isSwiping) {
           const totalDY = Math.abs(y - touchStartY);
           const totalDX = Math.abs(e.touches[0].clientX - touchStartX);
+          if (totalDY > 10 || totalDX > 10) cancelLongPress();
           if (totalDY > 10 && totalDY > totalDX) isSwiping = true;
         }
 
@@ -332,6 +373,7 @@
       }, { passive: false });
 
       touchOverlayEl.addEventListener('touchend', () => {
+        cancelLongPress();
         if (isSwiping) {
           // Momentum scrolling
           const lh = getLineHeight();
@@ -530,18 +572,25 @@
     const trimmed = floatingInputText.trimEnd();
     if (!trimmed) {
       wsManager.send({ type: 'terminal:input', terminalId, data: '\r' });
-      setTimeout(doScrollToBottom, 50);
       historyIndex = -1;
       return;
     }
     pushHistory(projectId, trimmed);
     historyIndex = -1;
     savedDraft = '';
-    const data = trimmed.replace(/\n/g, '\r') + '\r';
-    wsManager.send({ type: 'terminal:input', terminalId, data });
+    // Inject via xterm.paste(): when the app enabled bracketed paste (mode 2004,
+    // e.g. Claude Code / Codex) the text is wrapped so multi-line content lands as
+    // a single block instead of submitting line-by-line; then the trailing CR submits.
+    // When bracketed paste is off (plain shell) xterm normalizes newlines to CR,
+    // preserving the previous behavior. Fall back to raw input if xterm isn't ready.
+    if (terminal) {
+      terminal.paste(trimmed);
+      wsManager.send({ type: 'terminal:input', terminalId, data: '\r' });
+    } else {
+      wsManager.send({ type: 'terminal:input', terminalId, data: trimmed.replace(/\n/g, '\r') + '\r' });
+    }
     floatingInputText = '';
     floatingInputEl?.focus();
-    setTimeout(doScrollToBottom, 50);
   }
 
   function navigateHistory(direction: 'up' | 'down') {
@@ -634,6 +683,13 @@
   {#if showDropOverlay}
     <div class="drop-overlay">
       <span>Drop files to upload</span>
+    </div>
+  {/if}
+
+  {#if showSelectOverlay}
+    <div class="select-overlay">
+      <button class="select-close" onclick={() => showSelectOverlay = false}>&#x2716; Close</button>
+      <textarea class="select-textarea" readonly>{selectOverlayText}</textarea>
     </div>
   {/if}
 
@@ -1072,6 +1128,46 @@
   }
   .floating-textarea:focus { border-color: var(--accent); }
   .floating-textarea::placeholder { color: var(--text-tertiary); }
+
+  /* Select overlay (long-press on mobile) */
+  .select-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 200;
+    background: var(--bg-base);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .select-close {
+    flex-shrink: 0;
+    display: block;
+    width: 100%;
+    padding: 10px;
+    background: var(--bg-elevated);
+    border: none;
+    border-bottom: 1px solid var(--border-default);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    cursor: pointer;
+    text-align: center;
+  }
+  .select-textarea {
+    flex: 1;
+    width: 100%;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.3;
+    border: none;
+    padding: 12px;
+    resize: none;
+    outline: none;
+    user-select: text;
+    -webkit-user-select: text;
+  }
 
   /* Drop overlay */
   .drop-overlay {
